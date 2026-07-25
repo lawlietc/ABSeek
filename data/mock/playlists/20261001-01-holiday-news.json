@@ -1,0 +1,35 @@
+{
+  "id": "20261001-01-holiday-news",
+  "name": "国庆游戏资讯节日特辑",
+  "createdAt": "2026-10-01T08:00:00+08:00",
+  "updatedAt": "2026-10-01T08:30:00+08:00",
+  "templates": [
+    {
+      "templateId": "template-c",
+      "forAspect": "A",
+      "briefIds": [
+        "20260724-01-e3f4g5-ign-gta6-release-date",
+        "20260723-01-a1b2c3-ign-black-myth-wukong-dlc",
+        "20260724-02-h6i7j8-polygon-fromsoftware-new-ip",
+        "20260723-02-d4e5f6-eurogamer-final-fantasy-16-sequel",
+        "20260724-04-n2o3p4-ign-vr-sales-h1"
+      ]
+    },
+    {
+      "templateId": "template-c",
+      "forAspect": "B",
+      "briefIds": [
+        "20260723-06-p7q8r9-eurogamer-indie-spotlight",
+        "20260724-06-t8u9v0-polygon-cloud-gaming-100m",
+        "20260723-09-y7z8a9-pcgamer-steam-summer-sale",
+        "20260724-07-w1x2y3-eurogamer-sega-retro",
+        "20260723-07-s1t2u3-polygon-mobile-game-update"
+      ]
+    }
+  ],
+  "output": {
+    "lang": ["zh"],
+    "format": "jpg",
+    "quality": 90
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "template-a",
+  "name": "重磅资讯",
+  "version": "1.0.0",
+  "layout": {
+    "aspectRatio": "9:16",
+    "width": 1080,
+    "height": 1920,
+    "scale": 2
+  },
+  "limit": {
+    "maxBriefs": 4,
+    "overflowStrategy": "paginate"
+  },
+  "sort": [
+    { "field": "customAttrs.importance", "order": "desc" },
+    { "field": "date", "order": "desc" }
+  ],
+  "output": {
+    "format": "jpg",
+    "quality": 90,
+    "filename": "{{date}}-{{templateId}}-{{aspect}}-{{page}}-{{lang}}.jpg",
+    "lang": ["zh", "en"],
+    "onMissingLang": "fallback"
+  }
+}

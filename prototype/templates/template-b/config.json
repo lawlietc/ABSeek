@@ -1,0 +1,25 @@
+{
+  "id": "template-b",
+  "name": "快讯一览",
+  "version": "1.0.0",
+  "layout": {
+    "aspectRatio": "9:16",
+    "width": 1080,
+    "height": 1920,
+    "scale": 2
+  },
+  "limit": {
+    "maxBriefs": 8,
+    "overflowStrategy": "paginate"
+  },
+  "sort": [
+    { "field": "date", "order": "desc" }
+  ],
+  "output": {
+    "format": "jpg",
+    "quality": 90,
+    "filename": "{{date}}-{{templateId}}-{{aspect}}-{{page}}-{{lang}}.jpg",
+    "lang": ["zh", "en"],
+    "onMissingLang": "fallback"
+  }
+}

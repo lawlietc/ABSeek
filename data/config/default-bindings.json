@@ -1,0 +1,12 @@
+{
+  "bindings": [
+    {
+      "aspect": "A",
+      "templateId": "template-c"
+    },
+    {
+      "aspect": "B",
+      "templateId": "template-a"
+    }
+  ]
+}

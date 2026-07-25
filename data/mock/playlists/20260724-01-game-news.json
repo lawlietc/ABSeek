@@ -1,0 +1,42 @@
+{
+  "id": "20260724-01-game-news",
+  "name": "2026-07-24 游戏资讯日常合集",
+  "createdAt": "2026-07-24T09:00:00+08:00",
+  "updatedAt": "2026-07-24T09:30:00+08:00",
+  "templates": [
+    {
+      "templateId": "template-a",
+      "forAspect": "A",
+      "briefIds": [
+        "20260724-01-e3f4g5-ign-gta6-release-date",
+        "20260723-02-d4e5f6-eurogamer-final-fantasy-16-sequel",
+        "20260723-01-a1b2c3-ign-black-myth-wukong-dlc",
+        "20260724-02-h6i7j8-polygon-fromsoftware-new-ip",
+        "20260724-04-n2o3p4-ign-vr-sales-h1",
+        "20260723-03-g7h8i9-polygon-tgs-2026-lineup",
+        "20260723-04-j1k2l3-ign-nintendo-switch-2",
+        "20260723-05-m4n5o6-pcgamer-half-life-3-leak"
+      ]
+    },
+    {
+      "templateId": "template-b",
+      "forAspect": "B",
+      "briefIds": [
+        "20260723-06-p7q8r9-eurogamer-indie-spotlight",
+        "20260723-07-s1t2u3-polygon-mobile-game-update",
+        "20260723-08-v4w5x6-ign-esports-tournament",
+        "20260723-09-y7z8a9-pcgamer-steam-summer-sale",
+        "20260723-10-b0c1d2-eurogamer-ffxiv-7-0",
+        "20260724-05-q5r6s7-pcgamer-starfield-creation-kit",
+        "20260724-06-t8u9v0-polygon-cloud-gaming-100m",
+        "20260724-07-w1x2y3-eurogamer-sega-retro",
+        "20260724-08-z4a5b6-ign-valorant-patch"
+      ]
+    }
+  ],
+  "output": {
+    "lang": ["zh", "en"],
+    "format": "jpg",
+    "quality": 90
+  }
+}

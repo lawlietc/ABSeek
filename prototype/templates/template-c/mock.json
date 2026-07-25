@@ -1,0 +1,16 @@
+{
+  "briefs": [
+    {
+      "id": "mock-c-1",
+      "title": "示例节日标题",
+      "summary": "示例摘要内容。",
+      "date": "2026-10-01T08:00:00+08:00",
+      "source": "IGN",
+      "tags": ["游戏"],
+      "category": "游戏",
+      "customAttrs": { "importance": "high" },
+      "status": "reviewed",
+      "isTranslated": true
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{templateName}}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page">
+    <!-- 节日顶部 -->
+    <header class="header">
+      <div class="festive-deco">
+        <span class="lantern">🏮</span>
+        <span class="lantern">🏮</span>
+      </div>
+      <div class="brand-row">
+        <div class="brand-logo">AB</div>
+        <div class="brand-text">
+          <div class="brand-name">ABSeek 节日资讯</div>
+          <div class="brand-sub">{{date}}</div>
+        </div>
+      </div>
+      <h1 class="page-title">节日特辑</h1>
+      <div class="title-deco"></div>
+    </header>
+
+    <!-- 简讯列表 -->
+    <main class="briefs">
+      {{#each briefs}}
+      <article class="brief brief-{{customAttrs.importance}}">
+        <div class="brief-rank">{{inc @index}}</div>
+        <div class="brief-content">
+          <div class="brief-meta">
+            <span class="brief-source">{{source}}</span>
+            {{#if (eq customAttrs.importance "high")}}
+            <span class="brief-flag flag-high">头条</span>
+            {{else if (eq customAttrs.importance "medium")}}
+            <span class="brief-flag flag-medium">关注</span>
+            {{/if}}
+            <span class="brief-date">{{formatDate date}}</span>
+          </div>
+          <h2 class="brief-title">{{title}}{{#unless isTranslated}}<span class="untranslated">未翻译</span>{{/unless}}</h2>
+          <p class="brief-summary">{{summary}}</p>
+          <div class="brief-tags">
+            {{#each tags}}
+            <span class="tag">#{{this}}</span>
+            {{/each}}
+          </div>
+        </div>
+      </article>
+      {{/each}}
+    </main>
+
+    <!-- 底部 -->
+    <footer class="footer">
+      <div class="footer-row">
+        <span class="page-info">第 {{pagination.page}} / {{pagination.total}} 页</span>
+        <span class="footer-brand">ABSeek · 节日特辑</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

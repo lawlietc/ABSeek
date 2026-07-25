@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+prototype/node_modules/
+
+# Build output
+out/
+dist/
+.electron-cache/
+
+# Generated images (export products)
+output/images/
+prototype/output/
+
+# Runtime data
+data/_invalid/
+data/logs/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

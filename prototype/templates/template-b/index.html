@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{templateName}}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page">
+    <!-- 顶部 -->
+    <header class="header">
+      <div class="header-top">
+        <div class="brand">
+          <div class="brand-logo">AB</div>
+          <div class="brand-text">
+            <div class="brand-name">ABSeek 快讯</div>
+            <div class="brand-sub">B面 · 信息速览</div>
+          </div>
+        </div>
+        <div class="date-badge">{{date}}</div>
+      </div>
+      <div class="header-divider"></div>
+      <div class="stat">
+        <span class="stat-num">{{briefs.length}}</span>
+        <span class="stat-label">条快讯</span>
+      </div>
+    </header>
+
+    <!-- 列表 -->
+    <main class="briefs">
+      {{#each briefs}}
+      <article class="brief-row">
+        <div class="brief-time">
+          <div class="time-dot"></div>
+          <div class="time-text">{{formatTime date}}</div>
+        </div>
+        <div class="brief-body">
+          <div class="brief-head">
+            <span class="brief-source">{{source}}</span>
+            {{#if (eq customAttrs.importance "high")}}
+            <span class="badge badge-high">热</span>
+            {{else if (eq customAttrs.importance "medium")}}
+            <span class="badge badge-medium">荐</span>
+            {{/if}}
+          </div>
+          <h3 class="brief-title">{{title}}{{#unless isTranslated}}<span class="untranslated">未翻译</span>{{/unless}}</h3>
+          <p class="brief-summary">{{summary}}</p>
+        </div>
+      </article>
+      {{/each}}
+    </main>
+
+    <!-- 底部 -->
+    <footer class="footer">
+      <div class="footer-divider"></div>
+      <div class="footer-row">
+        <span class="page-info">{{pagination.page}} / {{pagination.total}}</span>
+        <span class="footer-brand">ABSeek · 本地资讯工具</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
