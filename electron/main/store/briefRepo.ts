@@ -209,7 +209,8 @@ export class BriefRepo {
   }
 
   private toFrontmatter(b: Brief): Record<string, unknown> {
-    return {
+    // 过滤 undefined 值：js-yaml safeDump 不接受 undefined
+    const raw: Record<string, unknown> = {
       id: b.id,
       date: b.date,
       source: b.source,
@@ -227,6 +228,11 @@ export class BriefRepo {
       status: b.status,
       agentMeta: b.agentMeta || null,
     };
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
   }
 
   /**

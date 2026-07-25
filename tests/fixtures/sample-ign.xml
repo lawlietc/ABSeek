@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>IGN All</title>
+    <link>https://www.ign.com</link>
+    <description>IGN Latest News</description>
+    <item>
+      <title>GTA 6 Release Window Confirmed for Spring 2027</title>
+      <link>https://www.ign.com/articles/gta6-release-window?utm_source=feed&amp;utm_medium=rss&amp;fbclid=abc123</link>
+      <pubDate>Wed, 23 Jul 2026 08:00:00 GMT</pubDate>
+      <dc:creator>IGN Editorial</dc:creator>
+      <description>Rockstar has confirmed GTA 6 will release in spring 2027.&amp;nbsp;First on PS5 and Xbox Series X|S.</description>
+      <content:encoded><![CDATA[<p>Rockstar Games today confirmed <strong>GTA 6</strong> will launch in spring 2027.</p><p>First on PS5 and Xbox Series X|S, PC version delayed.</p>]]></content:encoded>
+      <enclosure url="https://assets.ign.com/gta6-cover.jpg" length="12345" type="image/jpeg" />
+    </item>
+    <item>
+      <title>Black Myth: Wukong DLC Announced</title>
+      <link>https://www.ign.com/articles/black-myth-wukong-dlc</link>
+      <pubDate>Thu, 24 Jul 2026 10:30:00 GMT</pubDate>
+      <dc:creator>IGN News</dc:creator>
+      <description>Game Science reveals first story expansion for Black Myth: Wukong.</description>
+      <content:encoded><![CDATA[<p>Game Science reveals first story expansion.</p>]]></content:encoded>
+      <enclosure url="https://assets.ign.com/wukong-dlc.jpg" length="6789" type="image/jpeg" />
+    </item>
+    <item>
+      <title>Nintendo Switch 2 Sales Hit 20 Million</title>
+      <link>https://www.ign.com/articles/switch-2-sales-20m</link>
+      <pubDate>Fri, 25 Jul 2026 14:00:00 GMT</pubDate>
+      <dc:creator>IGN Business</dc:creator>
+      <description>Nintendo reports strong Switch 2 hardware sales.</description>
+      <content:encoded><![CDATA[<p>Nintendo reports 20M units sold.</p>]]></content:encoded>
+      <enclosure url="https://assets.ign.com/switch2.jpg" length="9999" type="image/jpeg" />
+    </item>
+  </channel>
+</rss>

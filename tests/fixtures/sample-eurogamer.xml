@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Eurogamer</title>
+    <link>https://www.eurogamer.net</link>
+    <item>
+      <title>Final Fantasy 16 Sequel Teased</title>
+      <link>https://www.eurogamer.net/ff16-sequel-teased</link>
+      <pubDate>Wed, 23 Jul 2026 09:15:00 GMT</pubDate>
+      <description>Square Enix hints at FF16 sequel.</description>
+    </item>
+    <item>
+      <title>Sega Retro Collection Launches</title>
+      <link>https://www.eurogamer.net/sega-retro-collection</link>
+      <pubDate>Thu, 24 Jul 2026 11:00:00 GMT</pubDate>
+      <description>Sega launches classic games bundle.</description>
+    </item>
+  </channel>
+</rss>
