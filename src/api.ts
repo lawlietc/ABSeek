@@ -6,6 +6,11 @@ export const api = {
     list: () => (raw ? raw.brief.list() : Promise.resolve([])),
     get: (id: string) => (raw ? raw.brief.get(id) : Promise.resolve(null)),
     save: (brief: any) => (raw ? raw.brief.save(brief) : Promise.resolve(false)),
+    // 订阅文件变化事件，返回取消订阅函数
+    onChanged: (cb: () => void): (() => void) => {
+      if (!raw?.brief?.onChanged) return () => {};
+      return raw.brief.onChanged(cb);
+    },
   },
   template: {
     list: () => (raw ? raw.template.list() : Promise.resolve([])),
@@ -34,6 +39,22 @@ export const api = {
   },
   app: {
     getOutputDir: () => (raw ? raw.app.getOutputDir() : Promise.resolve('')),
+  },
+  // v0.8: 采集配置
+  sources: {
+    list: () => (raw ? raw.sources.list() : Promise.resolve(null)),
+    save: (data: any) => (raw ? raw.sources.save(data) : Promise.resolve(false)),
+    testProxy: () =>
+      raw ? raw.sources.testProxy() : Promise.resolve({ success: false }),
+    testSource: (source: any) =>
+      raw
+        ? raw.sources.testSource(source)
+        : Promise.resolve({ success: false, fetched: 0, sample: [], error: 'no api' }),
+    collectNow: (sourceId: string) =>
+      raw
+        ? raw.sources.collectNow(sourceId)
+        : Promise.resolve({ success: false, newCount: 0, error: 'no api' }),
+    collectAll: () => (raw ? raw.sources.collectAll() : Promise.resolve([])),
   },
 };
 

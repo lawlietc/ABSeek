@@ -4,8 +4,10 @@ import { api, hasApi } from './api';
 import DatePicker from './components/DatePicker';
 import MultiTemplatePanel from './components/MultiTemplatePanel';
 import EditDrawer from './components/EditDrawer';
+import CollectorPanel from './components/CollectorPanel';
 
 type Filter = 'all' | 'A' | 'B';
+type Tab = 'studio' | 'collector';
 
 function todayStr(): string {
   const d = new Date();
@@ -16,6 +18,7 @@ function todayStr(): string {
 }
 
 export default function App() {
+  const [tab, setTab] = useState<Tab>('studio');
   const [briefs, setBriefs] = useState<Brief[]>([]);
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: todayStr(),
@@ -35,6 +38,14 @@ export default function App() {
 
   useEffect(() => {
     loadList();
+  }, [loadList]);
+
+  // 订阅文件变化事件（外部 agent 改 md 或采集入库 → 自动刷新列表）
+  useEffect(() => {
+    const unsub = api.brief.onChanged(() => {
+      loadList();
+    });
+    return unsub;
   }, [loadList]);
 
   // 日期范围 + aspect 筛选
@@ -99,33 +110,52 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="sidebar">
-        <header>
-          <h1>ABSeek</h1>
-          <span className="header-count">{briefs.length} 条</span>
-        </header>
+      <nav className="topnav">
+        <button
+          className={`nav-tab ${tab === 'studio' ? 'active' : ''}`}
+          onClick={() => setTab('studio')}
+        >
+          简讯工作室
+        </button>
+        <button
+          className={`nav-tab ${tab === 'collector' ? 'active' : ''}`}
+          onClick={() => setTab('collector')}
+        >
+          采集配置
+        </button>
+      </nav>
 
-        {!hasApi && (
-          <div className="warn-banner">
-            浏览器访问模式：IPC 不可用，请在 Electron 窗口内查看完整数据
-          </div>
-        )}
+      {tab === 'collector' ? (
+        <CollectorPanel />
+      ) : (
+        <div className="studio-row">
+          <div className="sidebar">
+            <header>
+              <h1>ABSeek</h1>
+              <span className="header-count">{briefs.length} 条</span>
+            </header>
 
-        <DatePicker value={dateRange} onChange={setDateRange} />
+            {!hasApi && (
+              <div className="warn-banner">
+                浏览器访问模式：IPC 不可用，请在 Electron 窗口内查看完整数据
+              </div>
+            )}
 
-        <div className="filter-row">
-          <button
-            className={`chip ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            全部
-          </button>
-          <button
-            className={`chip ${filter === 'A' ? 'active' : ''}`}
-            onClick={() => setFilter('A')}
-          >
-            A 面
-          </button>
+            <DatePicker value={dateRange} onChange={setDateRange} />
+
+            <div className="filter-row">
+              <button
+                className={`chip ${filter === 'all' ? 'active' : ''}`}
+                onClick={() => setFilter('all')}
+              >
+                全部
+              </button>
+              <button
+                className={`chip ${filter === 'A' ? 'active' : ''}`}
+                onClick={() => setFilter('A')}
+              >
+                A 面
+              </button>
           <button
             className={`chip ${filter === 'B' ? 'active' : ''}`}
             onClick={() => setFilter('B')}
@@ -235,6 +265,8 @@ export default function App() {
         onClose={() => setEditingId(null)}
         onSaved={loadList}
       />
+        </div>
+      )}
     </div>
   );
 }

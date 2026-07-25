@@ -26,7 +26,38 @@ body {
 
 .app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
+}
+
+/* ============ 顶部导航 ============ */
+.topnav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+.nav-tab {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.studio-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ============ 左侧 sidebar ============ */
@@ -445,3 +476,203 @@ body {
   line-height: 1;
 }
 .btn-danger:hover { background: #5a2a2a; }
+
+/* ============ v0.8 采集配置页 ============ */
+.collector-panel {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg);
+  padding: 20px 24px;
+}
+.cp-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.cp-header h2 {
+  margin: 0;
+  font-size: 18px;
+  flex: 1;
+}
+.cp-actions {
+  display: flex;
+  gap: 8px;
+}
+.cp-msg {
+  padding: 10px 14px;
+  background: #1c3040;
+  border: 1px solid #2a4a60;
+  color: #6bb3e0;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.cp-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.cp-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.cp-proxy-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.cp-radio {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.cp-proxy-server {
+  flex: 1;
+  min-width: 200px;
+}
+.cp-input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  width: 100%;
+}
+.cp-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cp-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cp-source-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+.cp-source-card.disabled {
+  opacity: 0.5;
+}
+.cp-source-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.cp-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.cp-source-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.cp-source-type {
+  font-size: 10px;
+  background: #2a3040;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.cp-source-schedule {
+  font-size: 11px;
+  color: var(--muted);
+}
+.cp-source-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.cp-source-url {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+.cp-runtime {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.cp-runtime.fail .cp-runtime-err {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+.cp-runtime-err {
+  color: #f2a365;
+}
+
+/* 采集源编辑抽屉 */
+.source-editor {
+  width: 420px;
+}
+.cp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.cp-field > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.cp-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 100;
+}
+.drawer {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  width: 420px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.drawer-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+}
+.drawer-head h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 14px;
+}
+.drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 18px;
+}
+.drawer-foot {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
