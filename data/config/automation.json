@@ -1,0 +1,28 @@
+{
+  "enabled": false,
+  "collect": {
+    "schedule": "0 8 * * *",
+    "enabled": true
+  },
+  "export": {
+    "schedule": "0 10 * * *",
+    "enabled": true,
+    "statusFilter": [
+      "processed",
+      "reviewed"
+    ],
+    "langs": [
+      "zh"
+    ]
+  },
+  "runtime": {
+    "lastCollectAt": null,
+    "lastCollectStatus": null,
+    "lastCollectCount": 0,
+    "lastExportAt": null,
+    "lastExportStatus": null,
+    "lastExportCount": 0,
+    "lastError": null,
+    "history": []
+  }
+}

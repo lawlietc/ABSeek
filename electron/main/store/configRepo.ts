@@ -1,5 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  AutomationConfig,
+  DEFAULT_AUTOMATION_CONFIG,
+} from '../automation/types';
 
 // ============ 采集源配置 ============
 
@@ -234,4 +238,36 @@ export function loadSettings(configDir: string): SettingsFile {
 export function saveSettings(configDir: string, data: SettingsFile): void {
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(path.join(configDir, 'settings.json'), JSON.stringify(data, null, 2), 'utf8');
+}
+
+// ============ automation.json（v0.9 每日自动化） ============
+
+export function loadAutomation(configDir: string): AutomationConfig {
+  const file = path.join(configDir, 'automation.json');
+  if (!fs.existsSync(file)) {
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(DEFAULT_AUTOMATION_CONFIG, null, 2), 'utf8');
+    return DEFAULT_AUTOMATION_CONFIG;
+  }
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<AutomationConfig>;
+    // 合并默认值，兼容缺失字段
+    return {
+      ...DEFAULT_AUTOMATION_CONFIG,
+      ...parsed,
+      collect: { ...DEFAULT_AUTOMATION_CONFIG.collect, ...(parsed.collect || {}) },
+      export: { ...DEFAULT_AUTOMATION_CONFIG.export, ...(parsed.export || {}) },
+      runtime: { ...DEFAULT_AUTOMATION_CONFIG.runtime, ...(parsed.runtime || {}) },
+    };
+  } catch (e) {
+    console.warn('[configRepo] automation.json 解析失败，使用默认', e);
+    return DEFAULT_AUTOMATION_CONFIG;
+  }
+}
+
+export function saveAutomation(configDir: string, data: AutomationConfig): void {
+  fs.mkdirSync(configDir, { recursive: true });
+  const file = path.join(configDir, 'automation.json');
+  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
 }

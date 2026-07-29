@@ -125,20 +125,50 @@ export default function MultiTemplatePanel({
         ) : selectedCount === 0 ? (
           <div className="empty">从左侧勾选简讯后，此处并排预览各模板</div>
         ) : (
-          bindings.map((b) => {
-            const aspectBriefs = briefs.filter((x) => x.aspect === b.aspect);
-            return (
-              <TemplateCard
-                key={`${b.templateId}-${b.aspect}`}
-                templateId={b.templateId}
-                aspect={b.aspect}
-                briefs={aspectBriefs}
-                lang={lang}
-              />
+          (() => {
+            // 如果选中的简讯都没分到任何 binding 对应的 aspect，给提示
+            const hasAnyMatched = bindings.some(
+              (b) => briefs.filter((x) => x.aspect === b.aspect).length > 0
             );
-          })
+
+            if (!hasAnyMatched) {
+              return (
+                <div className="empty">
+                  <div style={{ marginBottom: 8 }}>
+                    已选 {selectedCount} 条简讯，但都未分配到 A/B 面
+                  </div>
+                  <div style={{ color: 'var(--muted)', fontSize: 11 }}>
+                    请点左侧底部的「移到 A 面」或「移到 B 面」按钮分配 aspect 后再预览
+                  </div>
+                </div>
+              );
+            }
+
+            return bindings.map((b) => {
+              const aspectBriefs = briefs.filter((x) => x.aspect === b.aspect);
+              return (
+                <TemplateCard
+                  key={`${b.templateId}-${b.aspect}`}
+                  templateId={b.templateId}
+                  aspect={b.aspect}
+                  briefs={aspectBriefs}
+                  lang={lang}
+                />
+              );
+            });
+          })()
         )}
       </div>
+
+      {/* 选中了未分面简讯时的顶部提示条 */}
+      {selectedCount > 0 &&
+        briefs.some((b) => b.aspect !== 'A' && b.aspect !== 'B') && (
+          <div className="mp-unassigned-tip">
+            已选 {selectedCount} 条中有{' '}
+            {briefs.filter((b) => b.aspect !== 'A' && b.aspect !== 'B').length} 条未分配 aspect，
+            请用底部按钮「移到 A/B 面」
+          </div>
+        )}
 
       {showConfig && <div className="drawer-mask" onClick={() => setShowConfig(false)} />}
       <div className={`drawer binding-drawer ${showConfig ? 'open' : ''}`}>

@@ -20,8 +20,9 @@ export class BriefRepo {
 
   /**
    * 递归读取所有简讯
+   * @param includeExcluded 是否包含 status='excluded' 的简讯（默认 false，前端列表用）
    */
-  list(): Brief[] {
+  list(includeExcluded = false): Brief[] {
     const result: Brief[] = [];
     const walk = (dir: string) => {
       if (!fs.existsSync(dir)) return;
@@ -36,11 +37,16 @@ export class BriefRepo {
       }
     };
     walk(this.briefsDir);
-    return result;
+    return includeExcluded ? result : result.filter((b) => b.status !== 'excluded');
+  }
+
+  /** 返回全部简讯（含 excluded），用于去重索引 */
+  listAll(): Brief[] {
+    return this.list(true);
   }
 
   getById(id: string): Brief | null {
-    return this.list().find((b) => b.id === id) || null;
+    return this.listAll().find((b) => b.id === id) || null;
   }
 
   /**
@@ -278,7 +284,7 @@ export class BriefRepo {
     const titles: { title: string; url: string }[] = [];
 
     const cutoff = Date.now() - ttlDays * 24 * 3600 * 1000;
-    const all = this.list();
+    const all = this.listAll(); // 含 excluded，保证已排除的简讯也参与去重
     for (const b of all) {
       const ts = new Date(b.date).getTime();
       if (ts < cutoff) continue;

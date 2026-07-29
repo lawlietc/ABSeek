@@ -7,6 +7,7 @@ const VALID_STATUS: BriefStatus[] = [
   'exported',
   'archived',
   'ignored',
+  'excluded',
 ];
 
 export interface ValidationResult {

@@ -119,8 +119,22 @@ export default function EditDrawer({ briefId, onClose, onSaved }: Props) {
                   value={brief.aspect}
                   onChange={(e) => update({ aspect: e.target.value })}
                 >
+                  <option value="">未分面</option>
                   <option value="A">A</option>
                   <option value="B">B</option>
+                </select>
+              </div>
+              <div className="form-row">
+                <label>状态 (status)</label>
+                <select
+                  className="select"
+                  value={brief.status}
+                  onChange={(e) => update({ status: e.target.value })}
+                >
+                  <option value="raw">raw（待处理）</option>
+                  <option value="processed">processed（已处理）</option>
+                  <option value="reviewed">reviewed（已审阅）</option>
+                  <option value="excluded">excluded（已排除，保留用于去重）</option>
                 </select>
               </div>
               <div className="form-row">

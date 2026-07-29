@@ -3,7 +3,8 @@ const raw = typeof window !== 'undefined' ? (window as any).api : undefined;
 
 export const api = {
   brief: {
-    list: () => (raw ? raw.brief.list() : Promise.resolve([])),
+    list: (includeExcluded?: boolean) =>
+      raw ? raw.brief.list(includeExcluded) : Promise.resolve([]),
     get: (id: string) => (raw ? raw.brief.get(id) : Promise.resolve(null)),
     save: (brief: any) => (raw ? raw.brief.save(brief) : Promise.resolve(false)),
     // 订阅文件变化事件，返回取消订阅函数
@@ -55,6 +56,19 @@ export const api = {
         ? raw.sources.collectNow(sourceId)
         : Promise.resolve({ success: false, newCount: 0, error: 'no api' }),
     collectAll: () => (raw ? raw.sources.collectAll() : Promise.resolve([])),
+  },
+  // v0.9: 每日自动化
+  automation: {
+    get: () => (raw ? raw.automation.get() : Promise.resolve(null)),
+    save: (data: any) => (raw ? raw.automation.save(data) : Promise.resolve(false)),
+    runCollectNow: () =>
+      raw
+        ? raw.automation.runCollectNow()
+        : Promise.resolve({ status: 'failed', count: 0, durationMs: 0, error: 'no api' }),
+    runExportNow: () =>
+      raw
+        ? raw.automation.runExportNow()
+        : Promise.resolve({ status: 'failed', count: 0, durationMs: 0, error: 'no api' }),
   },
 };
 

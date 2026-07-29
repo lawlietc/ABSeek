@@ -15,6 +15,8 @@ import { createLogger } from './logger/logger';
 import {
   loadSources,
   saveSources,
+  loadAutomation,
+  saveAutomation,
   SourcesFile,
   SourceConfig,
 } from './store/configRepo';
@@ -24,6 +26,8 @@ import { ensureAgentGuide } from './store/agentGuide';
 import { Collector } from './collector/collector';
 import { Scheduler } from './collector/scheduler';
 import { testProxy } from './collector/proxy';
+import { Automation } from './automation/automation';
+import { AutomationConfig } from './automation/types';
 
 // 沙箱环境下 GPU 缓存写入失败会导致渲染进程崩溃白屏，禁用硬件规避
 app.disableHardwareAcceleration();
@@ -46,10 +50,19 @@ const OUTPUT_DIR = path.join(ROOT, 'output', 'images');
 const log = createLogger('app', LOGS_DIR);
 const collectorLog = createLogger('collector', LOGS_DIR);
 const watcherLog = createLogger('watcher', LOGS_DIR);
+const automationLog = createLogger('automation', LOGS_DIR);
 
 const briefRepo = new BriefRepo(BRIEFS_DIR, INVALID_DIR, watcherLog);
 const collector = new Collector(briefRepo, collectorLog);
 const scheduler = new Scheduler(collector, CONFIG_DIR, collectorLog);
+const automation = new Automation(
+  scheduler,
+  briefRepo,
+  CONFIG_DIR,
+  TEMPLATES_DIR,
+  OUTPUT_DIR,
+  automationLog
+);
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -102,8 +115,8 @@ const watcher = new BriefWatcher(BRIEFS_DIR, briefRepo, watcherLog, {
 // ============ IPC ============
 
 // 简讯列表
-ipcMain.handle('brief:list', async () => {
-  const briefs = briefRepo.list();
+ipcMain.handle('brief:list', async (_e, includeExcluded?: boolean) => {
+  const briefs = briefRepo.list(includeExcluded === true);
   return briefs.map((b) => ({ ...b, _filePath: undefined }));
 });
 
@@ -114,6 +127,11 @@ ipcMain.handle('brief:get', async (_e, id: string) => {
 
 // 保存简讯
 ipcMain.handle('brief:save', async (_e, brief: any) => {
+  // list 时清除了 _filePath，save 前根据 id 重新查找完整记录
+  if (!brief._filePath) {
+    const full = briefRepo.getById(brief.id);
+    if (full) brief._filePath = full._filePath;
+  }
   return briefRepo.save(brief);
 });
 
@@ -337,13 +355,45 @@ ipcMain.handle('sources:collectAll', async () => {
   return results;
 });
 
+// ============ v0.9 新增 IPC：每日自动化 ============
+
+// 读取 automation.json
+ipcMain.handle('automation:get', async () => {
+  return loadAutomation(CONFIG_DIR);
+});
+
+// 保存 automation.json（全量覆盖，配置变更后重新注册 cron）
+ipcMain.handle('automation:save', async (_e, data: AutomationConfig) => {
+  try {
+    saveAutomation(CONFIG_DIR, data);
+    automation.reload();
+    return true;
+  } catch (e) {
+    log.error('保存 automation.json 失败', e);
+    return false;
+  }
+});
+
+// 立即采集（强制重跑，无视"今日已成功"判定）
+ipcMain.handle('automation:runCollectNow', async () => {
+  return automation.runCollectNow();
+});
+
+// 立即出图（强制重跑）
+ipcMain.handle('automation:runExportNow', async () => {
+  return automation.runExportNow();
+});
+
 app.whenReady().then(() => {
   // 启动初始化：生成 AGENT_GUIDE、首次写入默认 sources.json、启动调度与监听
   ensureAgentGuide(DATA_DIR);
   // 触发首次 sources.json 落盘（loadSources 内部会写入默认配置）
   loadSources(CONFIG_DIR);
+  // 触发首次 automation.json 落盘
+  loadAutomation(CONFIG_DIR);
   scheduler.start();
   watcher.start();
+  automation.start();
 
   createWindow();
   app.on('activate', () => {
@@ -354,6 +404,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   scheduler.stop();
   watcher.stop();
+  automation.stop();
   closeBrowser();
   if (process.platform !== 'darwin') app.quit();
 });

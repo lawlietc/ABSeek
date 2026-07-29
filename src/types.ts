@@ -99,3 +99,54 @@ export interface CollectResult {
   newCount: number;
   error?: string;
 }
+
+// ============ v0.9 每日自动化 ============
+
+export type TaskType = 'collect' | 'export';
+export type TaskStatus = 'success' | 'failed' | 'skipped' | 'running';
+
+export interface CollectTaskConfig {
+  schedule: string;
+  enabled: boolean;
+}
+
+export interface ExportTaskConfig {
+  schedule: string;
+  enabled: boolean;
+  statusFilter: string[];
+  langs: string[];
+}
+
+export interface TaskHistoryItem {
+  at: string;
+  type: TaskType;
+  status: TaskStatus;
+  durationMs: number;
+  count?: number;
+  error?: string;
+}
+
+export interface AutomationRuntime {
+  lastCollectAt: string | null;
+  lastCollectStatus: TaskStatus | null;
+  lastCollectCount: number;
+  lastExportAt: string | null;
+  lastExportStatus: TaskStatus | null;
+  lastExportCount: number;
+  lastError: string | null;
+  history: TaskHistoryItem[];
+}
+
+export interface AutomationConfig {
+  enabled: boolean;
+  collect: CollectTaskConfig;
+  export: ExportTaskConfig;
+  runtime: AutomationRuntime;
+}
+
+export interface TaskRunResult {
+  status: TaskStatus;
+  count: number;
+  error?: string;
+  durationMs: number;
+}

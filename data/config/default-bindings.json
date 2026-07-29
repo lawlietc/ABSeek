@@ -2,7 +2,7 @@
   "bindings": [
     {
       "aspect": "A",
-      "templateId": "template-c"
+      "templateId": "template-a"
     },
     {
       "aspect": "B",

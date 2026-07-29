@@ -198,4 +198,71 @@ describe('BriefRepo.buildDedupIndex', () => {
     const idx = repo.buildDedupIndex(30);
     expect(idx.urls.size).toBe(0);
   });
+
+  it('已排除(excluded)的简讯仍纳入去重索引', () => {
+    // 核心诉求：被排除的简讯仍要参与去重，避免下次重复抓取
+    const s = makeSource();
+    const res = repo.saveCollected(makeRaw(), s, new Set());
+    const brief = repo.getById(res.id)!;
+    repo.save({ ...brief, status: 'excluded' });
+
+    // list() 默认过滤 excluded
+    expect(repo.list()).toHaveLength(0);
+    // 但 listAll() 包含
+    expect(repo.listAll()).toHaveLength(1);
+    // buildDedupIndex 用 listAll，去重索引仍包含被排除的简讯
+    const idx = repo.buildDedupIndex(30);
+    expect(idx.urls.size).toBeGreaterThan(0);
+    expect(idx.hashes.size).toBeGreaterThan(0);
+  });
+});
+
+describe('BriefRepo.list 过滤 excluded', () => {
+  it('list() 默认不返回 status=excluded 的简讯', () => {
+    const s = makeSource();
+    const r1 = repo.saveCollected(makeRaw({ title: '正常' }), s, new Set());
+    const r2 = repo.saveCollected(
+      makeRaw({ title: '被排除', sourceUrl: 'https://ign.com/excluded' }),
+      s,
+      new Set()
+    );
+
+    // 把 r2 标记为 excluded
+    const b2 = repo.getById(r2.id)!;
+    repo.save({ ...b2, status: 'excluded' });
+
+    // 默认只返回 r1
+    const list = repo.list();
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe(r1.id);
+  });
+
+  it('list(true) 返回包含 excluded 的全部', () => {
+    const s = makeSource();
+    const r1 = repo.saveCollected(makeRaw({ title: '正常' }), s, new Set());
+    const r2 = repo.saveCollected(
+      makeRaw({ title: '被排除', sourceUrl: 'https://ign.com/excluded' }),
+      s,
+      new Set()
+    );
+    const b2 = repo.getById(r2.id)!;
+    repo.save({ ...b2, status: 'excluded' });
+
+    const list = repo.list(true);
+    expect(list).toHaveLength(2);
+    expect(list.some((b) => b.id === r2.id && b.status === 'excluded')).toBe(true);
+  });
+
+  it('恢复 excluded 简讯后重新出现在 list()', () => {
+    const s = makeSource();
+    const res = repo.saveCollected(makeRaw(), s, new Set());
+    const brief = repo.getById(res.id)!;
+    repo.save({ ...brief, status: 'excluded' });
+    expect(repo.list()).toHaveLength(0);
+
+    // 恢复
+    const excluded = repo.getById(res.id)!;
+    repo.save({ ...excluded, status: 'raw' });
+    expect(repo.list()).toHaveLength(1);
+  });
 });

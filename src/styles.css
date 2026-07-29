@@ -128,6 +128,27 @@ body {
   min-width: 0;
 }
 .range-sep { color: var(--muted); font-size: 11px; }
+.apply-btn {
+  margin-left: 4px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+.apply-btn:disabled {
+  background: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.apply-btn.dirty:not(:disabled) {
+  background: var(--accent-2);
+  color: #1a1a1a;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
 
 /* aspect 筛选 */
 .filter-row {
@@ -216,6 +237,52 @@ body {
 }
 .badge.A { background: #3b1d2b; color: #ff6b8a; }
 .badge.B { background: #1d2b1d; color: #6bff9a; }
+.badge.unassigned {
+  background: #3a2a1a;
+  color: #f2a365;
+}
+.badge.excluded {
+  background: #2a2a2a;
+  color: #888;
+}
+
+/* 已排除的列表项：灰色 + 删除线 */
+.brief-item.excluded {
+  opacity: 0.5;
+}
+.brief-item.excluded .bi-title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.brief-item.excluded:hover { background: #1a1a1a; }
+
+/* 排除按钮（✕）红色调 */
+.bi-edit-btn.exclude-btn {
+  color: #ff6b6b;
+}
+.bi-edit-btn.exclude-btn:hover {
+  color: #fff;
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+}
+
+/* "显示已排除" 开关 */
+.excluded-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+  user-select: none;
+}
+.excluded-toggle input {
+  cursor: pointer;
+}
+.excluded-toggle:has(input:checked) {
+  color: var(--accent-2);
+}
 
 /* sidebar 底部操作 */
 .sidebar-footer {
@@ -340,6 +407,13 @@ body {
   padding: 8px 16px;
   background: #1d2b1d;
   color: var(--ok);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+}
+.mp-unassigned-tip {
+  padding: 8px 16px;
+  background: #3a2a1a;
+  color: #f2a365;
   font-size: 12px;
   border-top: 1px solid var(--border);
 }
@@ -675,4 +749,131 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ============ v0.9 每日自动化 ============ */
+.automation-section {
+  border-color: #2a3a4a;
+}
+.auto-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.auto-head h3 {
+  margin: 0;
+  flex: 1;
+}
+.auto-save-btn {
+  margin-left: auto;
+}
+.auto-tip {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border-radius: 4px;
+}
+.auto-task-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .auto-task-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.auto-task-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.auto-task-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.auto-task-title {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+}
+.auto-runtime {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 4px;
+  margin: 4px 0;
+}
+.auto-history {
+  margin-top: 14px;
+  font-size: 12px;
+}
+.auto-history summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.auto-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.auto-history-item {
+  display: flex;
+  gap: 12px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  align-items: center;
+}
+.auto-history-item.success {
+  color: var(--ok);
+}
+.auto-history-item.failed {
+  color: #ff6b6b;
+}
+.auto-history-item.skipped {
+  color: var(--muted);
+}
+.auto-history-time {
+  color: var(--muted);
+  min-width: 130px;
+}
+.auto-history-type {
+  font-weight: 600;
+  min-width: 50px;
+}
+.auto-history-status {
+  min-width: 60px;
+  font-weight: 600;
+}
+.auto-history-count {
+  color: var(--accent-2);
+}
+.auto-history-dur {
+  color: var(--muted);
+  margin-left: auto;
+}
+.auto-history-err {
+  color: #ff6b6b;
+  font-size: 10px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SourcesFile, SourceConfig, TestConnectionResult, CollectResult } from '../types';
+import {
+  SourcesFile,
+  SourceConfig,
+  TestConnectionResult,
+  CollectResult,
+  AutomationConfig,
+  TaskRunResult,
+} from '../types';
 import { api } from '../api';
 
 const emptyRuntime = {
@@ -34,6 +41,7 @@ function newSource(): SourceConfig {
 
 export default function CollectorPanel() {
   const [data, setData] = useState<SourcesFile | null>(null);
+  const [automation, setAutomation] = useState<AutomationConfig | null>(null);
   const [editing, setEditing] = useState<SourceConfig | null>(null);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState<string | null>(null); // 正在操作的 sourceId
@@ -41,6 +49,8 @@ export default function CollectorPanel() {
   const load = useCallback(async () => {
     const d = await api.sources.list();
     if (d) setData(d);
+    const a = await api.automation.get();
+    if (a) setAutomation(a);
   }, []);
 
   useEffect(() => {
@@ -142,6 +152,47 @@ export default function CollectorPanel() {
       ...data,
       global: { ...data.global, proxy: { ...data.global.proxy, mode } },
     });
+  };
+
+  // ===== automation handlers =====
+  const handleAutomationPatch = (patch: Partial<AutomationConfig>) => {
+    if (!automation) return;
+    setAutomation({ ...automation, ...patch });
+  };
+
+  const handleAutomationSave = async () => {
+    if (!automation) return;
+    const ok = await api.automation.save(automation);
+    showMsg(ok ? '已保存自动化配置（cron 已重载）' : '保存失败');
+    if (ok) await load();
+  };
+
+  const handleRunCollectNow = async () => {
+    setBusy('__auto_collect__');
+    const r: TaskRunResult = await api.automation.runCollectNow();
+    setBusy(null);
+    if (r.status === 'success') {
+      showMsg(`✓ 自动采集完成，新增 ${r.count} 条（耗时 ${Math.round(r.durationMs / 1000)}s）`);
+    } else if (r.status === 'skipped') {
+      showMsg('跳过：今日已成功采集');
+    } else {
+      showMsg(`✗ 自动采集失败：${r.error || '未知错误'}`);
+    }
+    await load();
+  };
+
+  const handleRunExportNow = async () => {
+    setBusy('__auto_export__');
+    const r: TaskRunResult = await api.automation.runExportNow();
+    setBusy(null);
+    if (r.status === 'success') {
+      showMsg(`✓ 自动出图完成，导出 ${r.count} 张（耗时 ${Math.round(r.durationMs / 1000)}s）`);
+    } else if (r.status === 'skipped') {
+      showMsg('跳过：今日已成功出图');
+    } else {
+      showMsg(`✗ 自动出图失败：${r.error || '未知错误'}`);
+    }
+    await load();
   };
 
   if (!data) return <div className="collector-panel">加载中...</div>;
@@ -259,6 +310,19 @@ export default function CollectorPanel() {
         </div>
       </section>
 
+      {/* v0.9 每日自动化 */}
+      {automation && (
+        <AutomationSection
+          automation={automation}
+          onPatch={handleAutomationPatch}
+          onSave={handleAutomationSave}
+          onRunCollect={handleRunCollectNow}
+          onRunExport={handleRunExportNow}
+          collectBusy={busy === '__auto_collect__'}
+          exportBusy={busy === '__auto_export__'}
+        />
+      )}
+
       {/* 编辑抽屉 */}
       {editing && (
         <SourceEditor
@@ -269,6 +333,196 @@ export default function CollectorPanel() {
         />
       )}
     </div>
+  );
+}
+
+// ============ v0.9 每日自动化区块 ============
+
+function AutomationSection({
+  automation,
+  onPatch,
+  onSave,
+  onRunCollect,
+  onRunExport,
+  collectBusy,
+  exportBusy,
+}: {
+  automation: AutomationConfig;
+  onPatch: (patch: Partial<AutomationConfig>) => void;
+  onSave: () => void;
+  onRunCollect: () => void;
+  onRunExport: () => void;
+  collectBusy: boolean;
+  exportBusy: boolean;
+}) {
+  const setCollect = (patch: Partial<AutomationConfig['collect']>) =>
+    onPatch({ collect: { ...automation.collect, ...patch } });
+  const setExport = (patch: Partial<AutomationConfig['export']>) =>
+    onPatch({ export: { ...automation.export, ...patch } });
+
+  return (
+    <section className="cp-section automation-section">
+      <div className="auto-head">
+        <h3>每日自动化</h3>
+        <label className="cp-switch">
+          <input
+            type="checkbox"
+            checked={automation.enabled}
+            onChange={(e) => onPatch({ enabled: e.target.checked })}
+          />
+          <span>总开关 {automation.enabled ? 'ON' : 'OFF'}</span>
+        </label>
+        <button className="btn-sm btn-primary auto-save-btn" onClick={onSave}>
+          保存自动化
+        </button>
+      </div>
+      <div className="auto-tip">
+        每天按 cron 自动采集 + 出图。同一天已成功的任务会自动跳过，手动触发会强制重跑。
+      </div>
+
+      <div className="auto-task-grid">
+        {/* 采集任务 */}
+        <div className="auto-task-card">
+          <div className="auto-task-head">
+            <span className="auto-task-title">采集任务</span>
+            <label className="cp-switch">
+              <input
+                type="checkbox"
+                checked={automation.collect.enabled}
+                onChange={(e) => setCollect({ enabled: e.target.checked })}
+              />
+            </label>
+          </div>
+          <label className="cp-field">
+            <span>cron 表达式</span>
+            <input
+              className="cp-input"
+              value={automation.collect.schedule}
+              onChange={(e) => setCollect({ schedule: e.target.value })}
+              placeholder="0 8 * * *"
+            />
+          </label>
+          <div className="auto-runtime">
+            <span>
+              上次：{automation.runtime.lastCollectAt
+                ? new Date(automation.runtime.lastCollectAt).toLocaleString()
+                : '—'}
+            </span>
+            <span>
+              状态：{automation.runtime.lastCollectStatus || '—'}
+            </span>
+            <span>新增：{automation.runtime.lastCollectCount} 条</span>
+          </div>
+          <button
+            className="btn-sm btn-secondary"
+            onClick={onRunCollect}
+            disabled={collectBusy || !automation.enabled}
+          >
+            {collectBusy ? '采集中...' : '立即采集'}
+          </button>
+        </div>
+
+        {/* 出图任务 */}
+        <div className="auto-task-card">
+          <div className="auto-task-head">
+            <span className="auto-task-title">出图任务</span>
+            <label className="cp-switch">
+              <input
+                type="checkbox"
+                checked={automation.export.enabled}
+                onChange={(e) => setExport({ enabled: e.target.checked })}
+              />
+            </label>
+          </div>
+          <label className="cp-field">
+            <span>cron 表达式</span>
+            <input
+              className="cp-input"
+              value={automation.export.schedule}
+              onChange={(e) => setExport({ schedule: e.target.value })}
+              placeholder="0 10 * * *"
+            />
+          </label>
+          <label className="cp-field">
+            <span>状态筛选（逗号分隔）</span>
+            <input
+              className="cp-input"
+              value={automation.export.statusFilter.join(',')}
+              onChange={(e) =>
+                setExport({
+                  statusFilter: e.target.value
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="processed,reviewed"
+            />
+          </label>
+          <label className="cp-field">
+            <span>出图语言（逗号分隔）</span>
+            <input
+              className="cp-input"
+              value={automation.export.langs.join(',')}
+              onChange={(e) =>
+                setExport({
+                  langs: e.target.value
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="zh,en"
+            />
+          </label>
+          <div className="auto-runtime">
+            <span>
+              上次：{automation.runtime.lastExportAt
+                ? new Date(automation.runtime.lastExportAt).toLocaleString()
+                : '—'}
+            </span>
+            <span>状态：{automation.runtime.lastExportStatus || '—'}</span>
+            <span>导出：{automation.runtime.lastExportCount} 张</span>
+          </div>
+          <button
+            className="btn-sm btn-secondary"
+            onClick={onRunExport}
+            disabled={exportBusy || !automation.enabled}
+          >
+            {exportBusy ? '出图中...' : '立即出图'}
+          </button>
+        </div>
+      </div>
+
+      {/* 历史记录 */}
+      {automation.runtime.history.length > 0 && (
+        <details className="auto-history">
+          <summary>历史记录（{automation.runtime.history.length}）</summary>
+          <ul className="auto-history-list">
+            {automation.runtime.history.slice(0, 20).map((h, i) => (
+              <li key={i} className={`auto-history-item ${h.status}`}>
+                <span className="auto-history-time">
+                  {new Date(h.at).toLocaleString()}
+                </span>
+                <span className="auto-history-type">{h.type}</span>
+                <span className="auto-history-status">{h.status}</span>
+                {h.count !== undefined && h.count > 0 && (
+                  <span className="auto-history-count">
+                    {h.type === 'collect' ? `新增 ${h.count}` : `导出 ${h.count}`}
+                  </span>
+                )}
+                <span className="auto-history-dur">{Math.round(h.durationMs / 1000)}s</span>
+                {h.error && (
+                  <span className="auto-history-err" title={h.error}>
+                    {h.error.substring(0, 80)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
   );
 }
 

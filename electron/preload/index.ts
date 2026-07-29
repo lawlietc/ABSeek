@@ -2,7 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 const api = {
   brief: {
-    list: () => ipcRenderer.invoke('brief:list'),
+    list: (includeExcluded?: boolean) =>
+      ipcRenderer.invoke('brief:list', includeExcluded),
     get: (id: string) => ipcRenderer.invoke('brief:get', id),
     save: (brief: any) => ipcRenderer.invoke('brief:save', brief),
     // 监听文件变化事件（外部 agent 改动 → 增量刷新）
@@ -48,6 +49,13 @@ const api = {
     testSource: (source: any) => ipcRenderer.invoke('source:test', source),
     collectNow: (sourceId: string) => ipcRenderer.invoke('source:collectNow', sourceId),
     collectAll: () => ipcRenderer.invoke('sources:collectAll'),
+  },
+  // v0.9: 每日自动化
+  automation: {
+    get: () => ipcRenderer.invoke('automation:get'),
+    save: (data: any) => ipcRenderer.invoke('automation:save', data),
+    runCollectNow: () => ipcRenderer.invoke('automation:runCollectNow'),
+    runExportNow: () => ipcRenderer.invoke('automation:runExportNow'),
   },
 };
 

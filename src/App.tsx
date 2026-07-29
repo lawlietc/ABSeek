@@ -30,11 +30,12 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState('');
+  const [showExcluded, setShowExcluded] = useState(false);
 
   const loadList = useCallback(async () => {
-    const list = await api.brief.list();
+    const list = await api.brief.list(showExcluded);
     setBriefs(list);
-  }, []);
+  }, [showExcluded]);
 
   useEffect(() => {
     loadList();
@@ -84,6 +85,20 @@ export default function App() {
       await api.brief.save({ ...b, aspect: targetAspect });
     }
     await loadList();
+  };
+
+  // 排除/恢复（改 status）
+  const setExcluded = async (ids: string[], excluded: boolean) => {
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      const b = briefs.find((x) => x.id === id);
+      if (!b) continue;
+      if (excluded && b.status === 'excluded') continue;
+      if (!excluded && b.status !== 'excluded') continue;
+      await api.brief.save({ ...b, status: excluded ? 'excluded' : 'raw' });
+    }
+    await loadList();
+    setSelectedIds([]);
   };
 
   // 导出
@@ -156,13 +171,24 @@ export default function App() {
               >
                 A 面
               </button>
-          <button
-            className={`chip ${filter === 'B' ? 'active' : ''}`}
-            onClick={() => setFilter('B')}
-          >
-            B 面
-          </button>
-        </div>
+              <button
+                className={`chip ${filter === 'B' ? 'active' : ''}`}
+                onClick={() => setFilter('B')}
+              >
+                B 面
+              </button>
+              <label
+                className="excluded-toggle"
+                title="显示被排除的简讯（不参与出图，但仍保留用于去重）"
+              >
+                <input
+                  type="checkbox"
+                  checked={showExcluded}
+                  onChange={(e) => setShowExcluded(e.target.checked)}
+                />
+                <span>显示已排除</span>
+              </label>
+            </div>
 
         <div className="list-toolbar">
           <span className="list-count">
@@ -186,10 +212,11 @@ export default function App() {
           {filtered.map((b) => {
             const checked = selectedIds.includes(b.id);
             const title = b.title.zh || b.title.en || b.id;
+            const isExcluded = b.status === 'excluded';
             return (
               <div
                 key={b.id}
-                className={`brief-item ${checked ? 'selected' : ''}`}
+                className={`brief-item ${checked ? 'selected' : ''} ${isExcluded ? 'excluded' : ''}`}
                 onClick={() => toggleSelect(b.id)}
               >
                 <input
@@ -201,11 +228,40 @@ export default function App() {
                 <div className="bi-content">
                   <div className="bi-title">{title}</div>
                   <div className="bi-meta">
-                    <span className={`badge ${b.aspect}`}>{b.aspect}</span>
+                    {isExcluded ? (
+                      <span className="badge excluded">已排除</span>
+                    ) : b.aspect === 'A' || b.aspect === 'B' ? (
+                      <span className={`badge ${b.aspect}`}>{b.aspect}</span>
+                    ) : (
+                      <span className="badge unassigned">未分面</span>
+                    )}
                     <span>{b.source}</span>
                     <span>{b.date.substring(0, 10)}</span>
                   </div>
                 </div>
+                {isExcluded ? (
+                  <button
+                    className="bi-edit-btn"
+                    title="恢复显示"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExcluded([b.id], false);
+                    }}
+                  >
+                    ↺
+                  </button>
+                ) : (
+                  <button
+                    className="bi-edit-btn exclude-btn"
+                    title="排除（保留用于去重，不在列表显示）"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExcluded([b.id], true);
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
                 <button
                   className="bi-edit-btn"
                   title="编辑"
@@ -245,6 +301,13 @@ export default function App() {
             disabled={selectedBriefs.length !== 1}
           >
             编辑
+          </button>
+          <button
+            className="btn-sm btn-danger"
+            onClick={() => setExcluded(selectedIds, true)}
+            disabled={selectedBriefs.length === 0}
+          >
+            排除选中
           </button>
         </div>
       </div>
