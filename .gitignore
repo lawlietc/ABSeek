@@ -8,7 +8,8 @@ dist/
 .electron-cache/
 
 # Generated images (export products)
-output/images/
+# 整个 output/ 排除：output 是独立 private repo，主 repo 不 track
+output/
 prototype/output/
 
 # Runtime data
