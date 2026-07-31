@@ -16,6 +16,6 @@
     },
     "types": ["node"]
   },
-  "include": ["src/**/*", "electron/**/*", "shared/**/*"],
+  "include": ["src/**/*", "electron/**/*", "shared/**/*", "cli/**/*"],
   "exclude": ["node_modules", "prototype", "out"]
 }

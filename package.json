@@ -5,13 +5,17 @@
   "main": "out/main/index.js",
   "author": "ABSeek",
   "license": "MIT",
+  "bin": {
+    "abseek": "out/main/cli.js"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "link:cli": "npm run build && npm link"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

@@ -69,6 +69,7 @@ export class BriefRepo {
       if (brief.status !== undefined) data.status = brief.status;
       if (brief.customAttrs !== undefined) data.customAttrs = brief.customAttrs;
       if (brief.originalTitle !== undefined) data.originalTitle = brief.originalTitle;
+      if (brief.agentMeta !== undefined) data.agentMeta = brief.agentMeta;
 
       const out = matter.stringify(parsed.content, data);
       fs.writeFileSync(brief._filePath, out, 'utf8');

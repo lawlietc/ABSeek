@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { SourceConfig, SourcesFile } from '../store/configRepo';
+import { SourceConfig, SourcesFile, ProxyConfig } from '../store/configRepo';
 import { BriefRepo } from '../store/briefRepo';
 import { RawBrief, CollectResult, TestConnectionResult } from './types';
 import { collectRss } from './rssAdapter';
@@ -7,6 +7,38 @@ import { collectStatic } from './crawlerAdapter';
 import { applyRules } from '../rules/ruleEngine';
 import { normalizeUrl, contentHash, titleSimilarity, TITLE_SIMILARITY_THRESHOLD } from './dedup';
 import { Logger } from '../logger/logger';
+
+/**
+ * 拉取单个 source 的原始数据（带代理降级重试）
+ *
+ * 行为：
+ * - 先按传入的 proxy 配置采集（可能是 manual 或 none）
+ * - 如果失败 且 当前用的是代理（mode !== 'none'），自动降级为 mode:'none' 再试一次
+ * - 降级仍失败则抛出最后一次的错误
+ *
+ * 这样海外源默认走 Clash 代理，代理挂了/证书错时自动回退直连，
+ * 避免单个源失败拖垮整次采集。
+ */
+async function fetchWithFallback(
+  source: SourceConfig,
+  proxy: ProxyConfig
+): Promise<RawBrief[]> {
+  const tryFetch = async (p: ProxyConfig): Promise<RawBrief[]> => {
+    if (source.type === 'rss') return collectRss(source, p);
+    if (source.type === 'crawler-static') return collectStatic(source, p);
+    throw new Error(`不支持的采集类型: ${source.type}`);
+  };
+
+  try {
+    return await tryFetch(proxy);
+  } catch (e) {
+    // 当前已经是直连，没有降级空间，直接抛出
+    if (proxy.mode === 'none') throw e;
+    // 当前是代理，降级为直连重试一次
+    // 注意：这里不记录为业务错误，降级是预期内的容错行为
+    return await tryFetch({ ...proxy, mode: 'none' });
+  }
+}
 
 export class Collector {
   constructor(
@@ -22,13 +54,7 @@ export class Collector {
     const proxy = source.request?.useProxy ? sourcesFile.global.proxy : { mode: 'none' as const };
 
     try {
-      if (source.type === 'rss') {
-        rawBriefs.push(...(await withRetry(() => collectRss(source, proxy), source.request)));
-      } else if (source.type === 'crawler-static') {
-        rawBriefs.push(...(await withRetry(() => collectStatic(source, proxy), source.request)));
-      } else {
-        throw new Error(`不支持的采集类型: ${source.type}`);
-      }
+      rawBriefs.push(...(await withRetry(() => fetchWithFallback(source, proxy), source.request)));
     } catch (e: any) {
       this.log.error(`[collect] 拉取失败: ${source.id}`, e);
       throw e;
@@ -97,12 +123,7 @@ export class Collector {
   async testConnection(source: SourceConfig, sourcesFile: SourcesFile): Promise<TestConnectionResult> {
     try {
       const proxy = source.request?.useProxy ? sourcesFile.global.proxy : { mode: 'none' as const };
-      let rawBriefs: RawBrief[] = [];
-      if (source.type === 'rss') {
-        rawBriefs = await collectRss(source, proxy);
-      } else if (source.type === 'crawler-static') {
-        rawBriefs = await collectStatic(source, proxy);
-      }
+      const rawBriefs = await fetchWithFallback(source, proxy);
       return {
         success: true,
         fetched: rawBriefs.length,
