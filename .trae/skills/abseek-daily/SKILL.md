@@ -14,7 +14,7 @@ description: "ABSeek 每日资讯出图自动化流程：采集资讯→处理�
 - 调用方式：`node out/main/cli.js <command> [options]`（下文统一用 `abseek` 代指）
 - 协作规范：`data/AGENT_GUIDE.md`（处理 md 文件前必读）
 
-## 完整流程（5 步）
+## 完整流程（6 步）
 
 ### 第 1 步：采集资讯
 
@@ -52,7 +52,7 @@ node out/main/cli.js brief list --status raw --json
 node out/main/cli.js brief list --status raw --json
 ```
 
-- 如果返回 `[]` 或数量为 0：说明期间状态已变化（可能被 GUI 或其他流程处理过），**跳过 STEP3，直接进入 STEP4**
+- 如果返回 `[]` 或数量为 0：说明期间状态已变化（可能被 GUI 或其他流程处理过），**跳过 STEP3，直接进入 STEP4（去重）**
 - 数量 > 0：以这次拉取的清单为准，继续逐条处理
 
 这一步避免「STEP2 拉到 N 条，STEP3 执行时 raw=0」的状态不一致问题。
@@ -130,9 +130,47 @@ agentMeta:
 - 单条处理失败：跳过，继续下一条，最后汇总失败数
 - 不要因为单条失败终止整个流程
 
-### 第 4 步：出图
+### 第 4 步：跨源去重
 
-所有 raw 简讯处理完成后（全部变成 processed / excluded / ignored 之一），执行：
+第 3 步处理完成后，简讯已变为 `processed` / `excluded` / `ignored`。由于多个信息源会报道同一事件，出图前必须先做跨源去重，确保同一日期同一事件最终只有一条简讯进入图片模板。
+
+```bash
+node out/main/cli.js brief dedup --auto --json
+```
+
+**作用**：
+- 扫描所有 `processed` 简讯，按日期窗口分组
+- 用标题相似度（Jaccard）+ 子串关系聚类，识别同一事件的多条简讯
+- 每个聚类按 `sources.json` 的 `priority` 字段选主（数字小优先；未配置视为最低优先级）
+- 主简讯保持 `processed`，其余标记为 `duplicate`（文件保留，`agentMeta.notes` 记录主简讯 id）
+- `brief list` 默认排除 `duplicate`，所以下一步出图只会拿到主简讯
+
+**输出**（JSON）：
+```json
+{ "success": true, "clusters": 3, "duplicates": 5, "primaryKept": 8, "details": [{ "primary": "20260730-01-xxx", "duplicates": ["20260730-05-yyy", "20260730-07-zzz"] }, ...] }
+```
+
+**判定**：
+- `success=true` → 继续（即使 `duplicates=0` 也正常，说明今日无重复）
+- 命令失败 → 告知用户错误，可跳过本步直接出图（去重不影响已 processed 简讯，只是可能出图含重复）
+
+**可选参数**：
+- `--date 2026-07-30`：只对指定日期去重（默认全量已 processed）
+- `--dry-run`：只输出会标记哪些，不实际改状态（预演用）
+
+**幂等性**：可重跑。已标记 `duplicate` 的不再参与聚类，新增信息源后重跑只会处理新进来的 processed 简讯。
+
+**查重记录**：被标记 `duplicate` 的简讯文件保留原位，`agentMeta.notes` 写入 `dedup: primary=<主简讯id>`。用以下命令查看全部重复记录：
+
+```bash
+node out/main/cli.js brief list --status duplicate --format compact
+```
+
+> ⚠️ 去重依赖 `sources.json` 里每个源的 `priority` 字段。新增源时记得配 priority（建议：官方源=1，权威综合=2，中文源=3，聚合=4），否则选主时按默认最低优先级处理。
+
+### 第 5 步：出图
+
+所有 raw 简讯处理完成且去重完成后（简讯为 processed / excluded / ignored / duplicate 之一），执行：
 
 ```bash
 node out/main/cli.js export --status processed --lang zh --json
@@ -148,11 +186,11 @@ node out/main/cli.js export --status processed --lang zh --json
 }
 ```
 
-### 第 5 步：确认生图结果（三层校验）
+### 第 6 步：确认生图结果（三层校验）
 
 agent 必须向用户汇报生图结果，三层校验确保可信：
 
-#### 5.1 检查 CLI 返回值
+#### 6.1 检查 CLI 返回值
 
 从 `export` 的 JSON 输出提取：
 - `success` 是否为 true
@@ -160,7 +198,7 @@ agent 必须向用户汇报生图结果，三层校验确保可信：
 - `outputDir`（输出目录绝对路径）
 - `briefCount`（参与出图的简讯数）
 
-#### 5.2 实际核对文件存在
+#### 6.2 实际核对文件存在
 
 用 Glob 或 LS 工具检查 `outputDir` 下是否真的有 `files` 列出的文件：
 
@@ -170,7 +208,7 @@ Glob pattern: output/images/<date>/*.jpg
 
 对比实际文件数与 `files.length`。若不一致，说明有遗漏，需排查。
 
-#### 5.3 汇总报告
+#### 6.3 汇总报告
 
 向用户输出结构化汇总，格式：
 
@@ -179,6 +217,7 @@ Glob pattern: output/images/<date>/*.jpg
 
 **采集**：3 个源，新增 12 条简讯
 **处理**：成功 10 条（A 面 6 条 / B 面 4 条），忽略 2 条
+**去重**：标记 5 条重复（保留 8 条主简讯，重复记录可用 `brief list --status duplicate` 查询）
 **出图**：生成 4 张图片
   - 2026-07-30-template-a-A-1-zh.jpg (A 面第 1 页)
   - 2026-07-30-template-a-A-2-zh.jpg (A 面第 2 页)
@@ -198,6 +237,8 @@ Glob pattern: output/images/<date>/*.jpg
 | `node out/main/cli.js collect --all --json` | 采集全部启用源 |
 | `node out/main/cli.js brief list --status raw --json` | 列待处理简讯 |
 | `node out/main/cli.js brief list --status processed --json` | 列已处理简讯（校验用） |
+| `node out/main/cli.js brief dedup --auto --json` | 跨源去重（出图前必跑，可加 `--date` / `--dry-run`） |
+| `node out/main/cli.js brief list --status duplicate --format compact` | 查看被去重的简讯记录 |
 | `node out/main/cli.js export --status processed --lang zh --json` | 出图 |
 | `node out/main/cli.js bindings list` | 查看 aspect→模板绑定 |
 | `node out/main/cli.js guide` | 打印 AGENT_GUIDE.md 路径 |
@@ -234,7 +275,8 @@ node -e "require('fs').appendFileSync('data/logs/skill-runs-2026-07-30.log','[08
 | 单条简讯处理完 | `[HH:MM:SS] [BRIEF] <id>: aspect=<A\|B\|空> changes=[字段列表]` | `[08:01:20] [BRIEF] 20260730-01-xxx: aspect=A changes=[title,summary,aspect,tags]` |
 | 单条简讯排除（非游戏） | `[HH:MM:SS] [BRIEF-EXCLUDE] <id>: <排除原因>` | `[08:01:30] [BRIEF-EXCLUDE] 20260730-02-yyy: 非游戏行业 → excluded` |
 | 单条简讯失败 | `[HH:MM:SS] [BRIEF-FAIL] <id>: <原因>` | `[08:02:00] [BRIEF-FAIL] 20260730-03-zzz: 内容为空 → ignored` |
-| 流程结束 | `[HH:MM:SS] [END] 采集N 处理M(成功X/失败Y) 出图K张` | `[08:03:30] [END] 采集12 处理12(成功11/失败1) 出图4张` |
+| 去重完成 | `[HH:MM:SS] [STEP4-OK] 去重: 聚类C 重复D条 主简讯P条` | `[08:03:05] [STEP4-OK] 去重: 聚类3 重复5条 主简讯8条` |
+| 流程结束 | `[HH:MM:SS] [END] 采集N 处理M(成功X/失败Y) 去重D条 出图K张` | `[08:03:30] [END] 采集12 处理12(成功11/失败1) 去重5条 出图4张` |
 
 ### 完整示例
 
@@ -248,9 +290,11 @@ node -e "require('fs').appendFileSync('data/logs/skill-runs-2026-07-30.log','[08
 [08:01:35] [BRIEF] 20260730-02-yyy: aspect=B changes=[title,summary,aspect,tags]
 [08:02:00] [BRIEF-FAIL] 20260730-03-zzz: 内容为空 → ignored
 [08:03:00] [STEP3-OK] 处理简讯: 成功11 失败1
-[08:03:01] [STEP4-START] 出图
-[08:03:30] [STEP4-OK] 出图: 4张 → output/images/2026-07-30
-[08:03:30] [END] 采集12 处理12(成功11/失败1) 出图4张
+[08:03:01] [STEP4-START] 去重
+[08:03:05] [STEP4-OK] 去重: 聚类3 重复5条 主简讯8条
+[08:03:06] [STEP5-START] 出图
+[08:03:30] [STEP5-OK] 出图: 4张 → output/images/2026-07-30
+[08:03:30] [END] 采集12 处理12(成功11/失败1) 去重5条 出图4张
 ```
 
 ### 日志文件路径

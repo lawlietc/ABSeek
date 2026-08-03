@@ -57,6 +57,11 @@ export interface SourceConfig {
   selectors?: Record<string, string>; // 静态爬虫选择器
   request?: RequestConfig;
   runtime: SourceRuntime;
+  /**
+   * 来源优先级（数字小优先）。跨源去重时，同事件的多个简讯按此排序选主。
+   * 未配置视为最低优先级（最大数字）。建议：官方源=1，权威综合=2，中文源=3，聚合=4。
+   */
+  priority?: number;
 }
 
 export interface DedupConfig {

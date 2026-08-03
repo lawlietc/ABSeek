@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import { BriefRepo } from '../electron/main/store/briefRepo';
 import { Collector } from '../electron/main/collector/collector';
 import { Scheduler } from '../electron/main/collector/scheduler';
+import { detectDuplicates } from '../electron/main/collector/duplicateDetector';
 import { loadSources } from '../electron/main/store/configRepo';
 import { runAutoExport } from '../electron/main/core/autoExport';
 import {
@@ -135,6 +136,8 @@ const USAGE = `ABSeek CLI - 让外部 agent 通过命令行编排 采集→处�
   brief list [options]                列出简讯
   brief get <id> [options]            查看单条简讯
   brief save <id> --set <k=v>...      修改简讯字段
+  brief process --auto                规则化批量处理 raw 简讯
+  brief dedup --auto                  跨源重复检测（process 之后、export 之前）
   export [options]                    按模板出图
   bindings list                       查看 aspect→模板绑定
   guide                               打印 AGENT_GUIDE.md 路径
@@ -145,7 +148,7 @@ const USAGE = `ABSeek CLI - 让外部 agent 通过命令行编排 采集→处�
   --help                              显示帮助
 
 brief list 选项:
-  --status <s>                        按状态筛选（raw/processed/reviewed/exported/excluded）
+  --status <s>                        按状态筛选（raw/processed/reviewed/exported/excluded/duplicate）
   --date <YYYY-MM-DD>                 按日期筛选
   --format <compact>                  紧凑输出（id | status | aspect | title），默认 JSON 或人类可读
 
@@ -156,6 +159,11 @@ brief save 选项:
 brief process --auto 选项:
   --dry-run                           只输出处理结果，不写回文件
   自动批量处理 raw 简讯：行业判断→翻译→分面→打标，固化逻辑无需临时脚本
+
+brief dedup --auto 选项:
+  --date <YYYY-MM-DD>                 只检测指定日期（默认全部 processed）
+  --dry-run                           只输出检测结果，不写回文件
+  跨源重复检测：同事件的多个简讯聚类→按来源优先级选主→其余置 duplicate
 
 export 选项:
   --date <YYYY-MM-DD>                 指定日期（默认今天）
@@ -168,6 +176,8 @@ export 选项:
   abseek collect --all                              采集所有启用源
   abseek brief list --status raw --format compact   紧凑列出待处理简讯
   abseek brief process --auto                       批量处理 raw 简讯
+  abseek brief dedup --auto --date 2026-08-01       检测指定日期跨源重复
+  abseek brief list --status duplicate              查看被合并的重复简讯
   abseek brief save 20260730-01-xxx --set aspect=A  修改简讯 aspect
   abseek export --status processed --lang zh --auto-date  自动回退日期出图
 `;
@@ -227,7 +237,9 @@ async function cmdBrief(args: ParsedArgs, paths: Paths, asJson: boolean) {
     const status = flag(args, 'status');
     const date = flag(args, 'date');
     const format = flag(args, 'format');
-    let briefs = briefRepo.list();
+    // list() 默认排除 excluded/duplicate；查这些状态时用 listAll()
+    const needAll = status === 'excluded' || status === 'duplicate';
+    let briefs = needAll ? briefRepo.listAll() : briefRepo.list();
 
     if (status) {
       briefs = briefs.filter((b) => b.status === status);
@@ -354,6 +366,30 @@ async function cmdBrief(args: ParsedArgs, paths: Paths, asJson: boolean) {
       console.log(`处理: 成功${result.success}(A${result.aCount}/B${result.bCount}/空${result.noAspect}) 排除${result.excluded} 失败${result.fail}`);
       for (const item of result.items) {
         console.log(`  ${item.id}: ${item.action} aspect=${item.aspect || '空'}`);
+      }
+    }
+    return;
+  }
+
+  if (sub === 'dedup') {
+    const auto = flagBool(args, 'auto');
+    const dryRun = flagBool(args, 'dry-run');
+    const date = flag(args, 'date');
+    if (!auto) {
+      console.error('目前只支持 --auto 模式: abseek brief dedup --auto [--date YYYY-MM-DD] [--dry-run]');
+      process.exit(1);
+    }
+    const sf = loadSources(paths.CONFIG_DIR);
+    const result = await detectDuplicates(briefRepo, sf.sources, date, dryRun, log);
+    if (asJson) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`跨源去重: 检测 ${result.total} 条 / ${result.clusters} 个重复聚类 / 标记 ${result.duplicates} 条 duplicate${dryRun ? ' (dry-run)' : ''}`);
+      for (const d of result.details) {
+        console.log(`  主=${d.primaryId}(${d.primarySource}) 合并 ${d.duplicateIds.length} 条  "${d.title.slice(0, 40)}"`);
+        for (const dupId of d.duplicateIds) {
+          console.log(`    └ ${dupId}`);
+        }
       }
     }
     return;

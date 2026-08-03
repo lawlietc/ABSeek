@@ -9,6 +9,7 @@ export interface SchedulerCallbacks {
 
 export class Scheduler {
   private tasks = new Map<string, cron.ScheduledTask>();
+  private running = new Map<string, Promise<{ success: boolean; newCount: number; error?: string }>>();
   private collector: Collector;
   private configDir: string;
   private log: Logger;
@@ -65,8 +66,26 @@ export class Scheduler {
 
   /**
    * 立即采集单个 source（更新 runtime）
+   *
+   * 并发保护：同一 source 同时只允许一个采集任务，第二个调用直接跳过返回。
+   * 防止 per-source cron 与 automation 全局 cron / 手动触发同时跑同一 source，
+   * 导致两个 collect() 基于同一份磁盘快照做去重判定，双双通过后写入 -01/-02 重复文件。
    */
   async runCollect(sourceId: string): Promise<{ success: boolean; newCount: number; error?: string }> {
+    if (this.running.has(sourceId)) {
+      this.log.info(`[scheduler] ${sourceId} 正在采集，跳过本次触发`);
+      return { success: false, newCount: 0, error: 'already running' };
+    }
+    const p = this._runCollect(sourceId);
+    this.running.set(sourceId, p);
+    try {
+      return await p;
+    } finally {
+      this.running.delete(sourceId);
+    }
+  }
+
+  private async _runCollect(sourceId: string): Promise<{ success: boolean; newCount: number; error?: string }> {
     const sourcesFile = loadSources(this.configDir);
     const source = sourcesFile.sources.find((s) => s.id === sourceId);
     if (!source) return { success: false, newCount: 0, error: 'source not found' };

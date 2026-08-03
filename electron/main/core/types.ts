@@ -19,7 +19,8 @@ export type BriefStatus =
   | 'exported'
   | 'archived'
   | 'ignored'
-  | 'excluded';
+  | 'excluded'
+  | 'duplicate';
 
 export interface Brief {
   id: string;

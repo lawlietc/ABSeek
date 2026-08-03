@@ -32,3 +32,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# 一键推送脚本（本地工具，不进 repo）
+push-all.bat

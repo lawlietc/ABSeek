@@ -20,7 +20,7 @@ export class BriefRepo {
 
   /**
    * 递归读取所有简讯
-   * @param includeExcluded 是否包含 status='excluded' 的简讯（默认 false，前端列表用）
+   * @param includeExcluded 是否包含 status='excluded' 或 'duplicate' 的简讯（默认 false，前端列表用）
    */
   list(includeExcluded = false): Brief[] {
     const result: Brief[] = [];
@@ -37,10 +37,12 @@ export class BriefRepo {
       }
     };
     walk(this.briefsDir);
-    return includeExcluded ? result : result.filter((b) => b.status !== 'excluded');
+    return includeExcluded
+      ? result
+      : result.filter((b) => b.status !== 'excluded' && b.status !== 'duplicate');
   }
 
-  /** 返回全部简讯（含 excluded），用于去重索引 */
+  /** 返回全部简讯（含 excluded / duplicate），用于去重索引 */
   listAll(): Brief[] {
     return this.list(true);
   }
