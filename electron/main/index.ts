@@ -23,7 +23,7 @@ import {
 import { BriefRepo } from './store/briefRepo';
 import { StoryRepo } from './store/storyRepo';
 import { BriefWatcher } from './store/watcher';
-import { loadProfiles, resolveProfileDataDir, ProfileInfo } from './store/profile';
+import { loadProfiles, resolveProfileDataDir, resolveProfileOutputDir, ProfileInfo } from './store/profile';
 import { ensureAgentGuide } from './store/agentGuide';
 import { Collector } from './collector/collector';
 import { Scheduler } from './collector/scheduler';
@@ -42,7 +42,6 @@ const ROOT = app.isPackaged
   ? path.dirname(app.getPath('exe'))
   : process.cwd();
 const TEMPLATES_DIR = path.join(ROOT, 'templates');
-const OUTPUT_DIR = path.join(ROOT, 'output', 'images');
 const PROFILES_JSON = path.join(ROOT, 'data', 'profiles.json');
 
 // ============ 当前 profile 上下文（可运行期重建） ============
@@ -51,6 +50,7 @@ interface AppContext {
   profileId: string;
   profileName: string;
   dataDir: string;
+  outputDir: string;
   briefsDir: string;
   storiesDir: string;
   invalidDir: string;
@@ -75,6 +75,7 @@ let mainWindow: BrowserWindow | null = null;
  */
 function buildContext(profileId: string, profileName: string): AppContext {
   const dataDir = resolveProfileDataDir(ROOT, profileId);
+  const outputDir = resolveProfileOutputDir(ROOT, profileId);
   const briefsDir = path.join(dataDir, 'briefs');
   const storiesDir = path.join(dataDir, 'stories');
   const invalidDir = path.join(dataDir, '_invalid');
@@ -96,7 +97,7 @@ function buildContext(profileId: string, profileName: string): AppContext {
     storyRepo,
     configDir,
     TEMPLATES_DIR,
-    OUTPUT_DIR,
+    outputDir,
     automationLog
   );
 
@@ -115,6 +116,7 @@ function buildContext(profileId: string, profileName: string): AppContext {
     profileId,
     profileName,
     dataDir,
+    outputDir,
     briefsDir,
     storiesDir,
     invalidDir,
@@ -348,7 +350,7 @@ ipcMain.handle('playlist:list', async () => {
 ipcMain.handle('playlist:render', async (_e, playlistId: string) => {
   const pl = loadPlaylist(path.join(ctx!.dataDir, 'mock', 'playlists'), playlistId);
   const allBriefs = ctx!.briefRepo.list();
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  fs.mkdirSync(ctx!.outputDir, { recursive: true });
   const exportDate = new Date().toISOString().substring(0, 10);
   const files: string[] = [];
 
@@ -387,7 +389,7 @@ ipcMain.handle('playlist:render', async (_e, playlistId: string) => {
 });
 
 // 选取输出目录（后续可扩展）
-ipcMain.handle('app:getOutputDir', async () => OUTPUT_DIR);
+ipcMain.handle('app:getOutputDir', async () => ctx!.outputDir);
 
 // 读取 default-bindings（aspect → templateId）
 ipcMain.handle('bindings:list', async () => {
@@ -429,7 +431,7 @@ ipcMain.handle(
 
     const bindings = loadDefaultBindings(ctx!.configDir);
     const exportDate = new Date().toISOString().substring(0, 10);
-    const datedOutputDir = path.join(OUTPUT_DIR, exportDate);
+    const datedOutputDir = path.join(ctx!.outputDir, exportDate);
     fs.mkdirSync(datedOutputDir, { recursive: true });
     const files: string[] = [];
 
@@ -481,7 +483,7 @@ ipcMain.handle(
 
     const bindings = loadDefaultBindings(ctx!.configDir);
     const exportDate = new Date().toISOString().substring(0, 10);
-    const datedOutputDir = path.join(OUTPUT_DIR, exportDate);
+    const datedOutputDir = path.join(ctx!.outputDir, exportDate);
     fs.mkdirSync(datedOutputDir, { recursive: true });
     const files: string[] = [];
 

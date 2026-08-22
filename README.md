@@ -138,7 +138,7 @@ tests/            单元 + 集成测试
 - 简讯文件：`data/briefs/{YYYY-MM-DD}/{id}.md`
 - 模板文件：`templates/{templateId}/`（含 config.json / index.html / style.css）
 - aspect 绑定：`data/config/default-bindings.json`
-- 输出图片：`output/images/{YYYY-MM-DD}/`（已 gitignore，独立管理）
+- 输出图片：`output/<profile>/images/{YYYY-MM-DD}/`（已 gitignore，独立管理）
 
 ---
 

@@ -138,7 +138,7 @@ tests/            Unit + integration tests
 - Brief files: `data/briefs/{YYYY-MM-DD}/{id}.md`
 - Template files: `templates/{templateId}/` (config.json / index.html / style.css)
 - Aspect bindings: `data/config/default-bindings.json`
-- Output images: `output/images/{YYYY-MM-DD}/` (gitignored, managed separately)
+- Output images: `output/<profile>/images/{YYYY-MM-DD}/` (gitignored, managed separately)
 
 ---
 

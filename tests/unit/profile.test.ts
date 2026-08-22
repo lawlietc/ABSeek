@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { loadProfiles, resolveProfileDataDir } from '../../electron/main/store/profile';
+import { loadProfiles, resolveProfileDataDir, resolveProfileOutputDir, isValidProfileId } from '../../electron/main/store/profile';
 
 let tmpRoot: string;
 
@@ -53,5 +53,23 @@ describe('loadProfiles', () => {
     const file = path.join(tmpRoot, 'profiles.json');
     fs.writeFileSync(file, 'not json', 'utf8');
     expect(loadProfiles(file)).toEqual([{ id: 'game', name: '游戏' }]);
+  });
+});
+
+describe('resolveProfileOutputDir', () => {
+  it('按 profile id 分组：output/<id>/images', () => {
+    expect(resolveProfileOutputDir(tmpRoot, undefined)).toBe(path.join(tmpRoot, 'output', 'game', 'images'));
+    expect(resolveProfileOutputDir(tmpRoot, 'game')).toBe(path.join(tmpRoot, 'output', 'game', 'images'));
+    expect(resolveProfileOutputDir(tmpRoot, 'ai')).toBe(path.join(tmpRoot, 'output', 'ai', 'images'));
+  });
+});
+
+describe('isValidProfileId', () => {
+  it('仅允许 ASCII slug（字母/数字/连字符），拒绝中文等字符', () => {
+    expect(isValidProfileId('game')).toBe(true);
+    expect(isValidProfileId('ai-news')).toBe(true);
+    expect(isValidProfileId('游戏')).toBe(false);
+    expect(isValidProfileId('a i')).toBe(false);
+    expect(isValidProfileId('')).toBe(false);
   });
 });

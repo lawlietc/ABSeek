@@ -36,3 +36,20 @@ export function resolveProfileDataDir(root: string, profileId?: string): string 
   }
   return path.join(root, 'data', 'profiles', profileId);
 }
+
+/**
+ * 解析某 profile 的输出根目录：output/{id}/。
+ * id 必须是 ASCII slug（字母/数字/连字符），避免中文等字符在
+ * Windows 路径、脚本引用、URL 场景下的编码问题。
+ */
+export function isValidProfileId(profileId: string): boolean {
+  return /^[A-Za-z0-9-]+$/.test(profileId);
+}
+
+/**
+ * 解析某 profile 的出图目录：output/{id}/images/。
+ */
+export function resolveProfileOutputDir(root: string, profileId?: string): string {
+  const id = profileId || 'game';
+  return path.join(root, 'output', id, 'images');
+}

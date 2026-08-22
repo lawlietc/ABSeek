@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { BriefRepo } from '../electron/main/store/briefRepo';
 import { StoryRepo } from '../electron/main/store/storyRepo';
-import { resolveProfileDataDir } from '../electron/main/store/profile';
+import { resolveProfileDataDir, resolveProfileOutputDir } from '../electron/main/store/profile';
 import {
   loadProfileRules,
   isInIndustry,
@@ -45,7 +45,7 @@ function resolvePaths(dataDirFlag?: string, profileId?: string) {
     INVALID_DIR: path.join(DATA_DIR, '_invalid'),
     LOGS_DIR: path.join(DATA_DIR, 'logs'),
     TEMPLATES_DIR: path.join(ROOT, 'templates'),
-    OUTPUT_DIR: path.join(ROOT, 'output', 'images'),
+    OUTPUT_DIR: resolveProfileOutputDir(ROOT, profileId),
   };
 }
 

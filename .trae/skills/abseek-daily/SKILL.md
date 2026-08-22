@@ -210,7 +210,7 @@ node out/main/cli.js export --status processed --lang zh --date <YYYY-MM-DD> --a
 {
   "success": true,
   "files": ["2026-08-09-template-a-A-1-zh.jpg", ...],
-  "outputDir": "D:\\LFolder\\AIProgram\\ABSeek\\output\\images\\2026-08-09",
+  "outputDir": "D:\\LFolder\\AIProgram\\ABSeek\\output\\<profile>\\images\\2026-08-09",
   "briefCount": 8
 }
 ```
@@ -222,7 +222,7 @@ node out/main/cli.js export --status processed --lang zh --date <YYYY-MM-DD> --a
 
 #### 7.2 实际核对文件存在
 ```
-Glob pattern: output/images/<date>/*.jpg
+Glob pattern: output/<profile>/images/<date>/*.jpg
 ```
 对比实际文件数与 `files.length`。
 
