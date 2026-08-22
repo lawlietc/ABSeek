@@ -38,6 +38,20 @@ body {
   background: var(--panel);
   flex-shrink: 0;
 }
+.nav-tabs {
+  display: flex;
+  flex: 1;
+}
+.nav-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+.profile-switching {
+  color: var(--muted);
+  font-size: 12px;
+}
 .nav-tab {
   padding: 10px 20px;
   background: none;
@@ -876,4 +890,52 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ============ Story 信源引用编辑 ============ */
+.src-list {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.src-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--panel);
+}
+.src-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.src-item-name {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.src-item-id {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.src-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px;
+  text-align: center;
+}
+.src-add select {
+  width: 100%;
 }

@@ -13,6 +13,27 @@ const api = {
       return () => ipcRenderer.removeListener('brief:changed', handler);
     },
   },
+  story: {
+    list: (includeExcluded?: boolean) =>
+      ipcRenderer.invoke('story:list', includeExcluded),
+    get: (id: string) => ipcRenderer.invoke('story:get', id),
+    save: (story: any) => ipcRenderer.invoke('story:save', story),
+    onChanged: (cb: () => void) => {
+      const handler = () => cb();
+      ipcRenderer.on('story:changed', handler);
+      return () => ipcRenderer.removeListener('story:changed', handler);
+    },
+  },
+  profile: {
+    list: () => ipcRenderer.invoke('profile:list'),
+    getCurrent: () => ipcRenderer.invoke('profile:getCurrent'),
+    switch: (profileId: string) => ipcRenderer.invoke('profile:switch', profileId),
+    onChanged: (cb: () => void) => {
+      const handler = () => cb();
+      ipcRenderer.on('profile:changed', handler);
+      return () => ipcRenderer.removeListener('profile:changed', handler);
+    },
+  },
   template: {
     list: () => ipcRenderer.invoke('template:list'),
     previewHtml: (args: {
@@ -21,6 +42,12 @@ const api = {
       lang: string;
       page?: number;
     }) => ipcRenderer.invoke('template:previewHtml', args),
+    previewStory: (args: {
+      templateId: string;
+      storyIds: string[];
+      lang: string;
+      page?: number;
+    }) => ipcRenderer.invoke('story:previewHtml', args),
   },
   playlist: {
     list: () => ipcRenderer.invoke('playlist:list'),
@@ -37,6 +64,8 @@ const api = {
   export: {
     current: (args: { briefIds: string[]; lang: string }) =>
       ipcRenderer.invoke('export:current', args),
+    story: (args: { storyIds: string[]; lang: string }) =>
+      ipcRenderer.invoke('story:export', args),
   },
   app: {
     getOutputDir: () => ipcRenderer.invoke('app:getOutputDir'),

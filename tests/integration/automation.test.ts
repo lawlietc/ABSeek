@@ -3,17 +3,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-// mock runAutoExport：避免真的调用 puppeteer 出图
-const { mockRunAutoExport } = vi.hoisted(() => ({
-  mockRunAutoExport: vi.fn(),
+// mock runStoryAutoExport：避免真的调用 puppeteer 出图
+const { mockRunStoryAutoExport } = vi.hoisted(() => ({
+  mockRunStoryAutoExport: vi.fn(),
 }));
 vi.mock('../../electron/main/core/autoExport', () => ({
-  runAutoExport: mockRunAutoExport,
-  filterBriefsForAutoExport: vi.fn((briefs: any[]) => briefs), // 直通
+  runStoryAutoExport: mockRunStoryAutoExport,
+  runAutoExport: vi.fn(),
+  filterStoriesForAutoExport: vi.fn((stories: any[]) => stories), // 直通
 }));
 
 import { Automation } from '../../electron/main/automation/automation';
 import { BriefRepo } from '../../electron/main/store/briefRepo';
+import { StoryRepo } from '../../electron/main/store/storyRepo';
 import { createLogger } from '../../electron/main/logger/logger';
 import { saveAutomation } from '../../electron/main/store/configRepo';
 import { saveSources, DEFAULT_SOURCES_FILE } from '../../electron/main/store/configRepo';
@@ -25,9 +27,11 @@ let configDir: string;
 let templatesDir: string;
 let outputDir: string;
 let briefsDir: string;
+let storiesDir: string;
 let invalidDir: string;
 let logsDir: string;
 let briefRepo: BriefRepo;
+let storyRepo: StoryRepo;
 let log: ReturnType<typeof createLogger>;
 
 /** fake scheduler：可控的 runCollect */
@@ -61,10 +65,13 @@ beforeEach(() => {
   fs.mkdirSync(logsDir, { recursive: true });
 
   briefRepo = new BriefRepo(briefsDir, invalidDir, createLogger('test', logsDir));
+  storiesDir = path.join(tmpRoot, 'stories');
+  fs.mkdirSync(storiesDir, { recursive: true });
+  storyRepo = new StoryRepo(storiesDir, invalidDir, createLogger('test', logsDir));
   log = createLogger('test-auto', logsDir);
 
-  mockRunAutoExport.mockReset();
-  mockRunAutoExport.mockResolvedValue({
+  mockRunStoryAutoExport.mockReset();
+  mockRunStoryAutoExport.mockResolvedValue({
     success: true,
     files: ['2026-07-25-template-a-A-1-zh.jpg'],
     outputDir: path.join(outputDir, '2026-07-25'),
@@ -100,7 +107,7 @@ describe('Automation 集成测试', () => {
     saveSources(configDir, DEFAULT_SOURCES_FILE);
 
     const { impl, calls } = makeFakeScheduler();
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
 
     const r = await automation.runCollectNow();
     expect(r.status).toBe('success');
@@ -113,14 +120,14 @@ describe('Automation 集成测试', () => {
     saveAutomation(configDir, cfg);
 
     const { impl } = makeFakeScheduler();
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
 
     const r = await automation.runExportNow();
     expect(r.status).toBe('success');
     expect(r.count).toBe(1);
-    expect(mockRunAutoExport).toHaveBeenCalledOnce();
+    expect(mockRunStoryAutoExport).toHaveBeenCalledOnce();
     // 验证传递的参数
-    const args = mockRunAutoExport.mock.calls[0];
+    const args = mockRunStoryAutoExport.mock.calls[0];
     expect(args[4]).toMatchObject({
       statusFilter: ['processed', 'reviewed'],
       langs: ['zh'],
@@ -133,7 +140,7 @@ describe('Automation 集成测试', () => {
     saveSources(configDir, DEFAULT_SOURCES_FILE);
 
     const { impl } = makeFakeScheduler();
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
 
     await automation.runCollectNow();
 
@@ -168,7 +175,7 @@ describe('Automation 集成测试', () => {
       reloadAll: vi.fn(),
     } as unknown as Scheduler;
 
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
     const r = await automation.runCollectNow();
 
     expect(r.status).toBe('success');
@@ -187,7 +194,7 @@ describe('Automation 集成测试', () => {
       reloadAll: vi.fn(),
     } as unknown as Scheduler;
 
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
     const r = await automation.runCollectNow();
 
     expect(r.status).toBe('failed');
@@ -196,7 +203,7 @@ describe('Automation 集成测试', () => {
 
   it('出图返回 success=false 时整体 failed', async () => {
     saveAutomation(configDir, makeAutomationConfig());
-    mockRunAutoExport.mockResolvedValue({
+    mockRunStoryAutoExport.mockResolvedValue({
       success: false,
       files: [],
       outputDir: '',
@@ -205,7 +212,7 @@ describe('Automation 集成测试', () => {
     });
 
     const { impl } = makeFakeScheduler();
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
     const r = await automation.runExportNow();
 
     expect(r.status).toBe('failed');
@@ -217,7 +224,7 @@ describe('Automation 集成测试', () => {
     saveSources(configDir, DEFAULT_SOURCES_FILE);
 
     const { impl } = makeFakeScheduler();
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
 
     // 跑 55 次出图
     for (let i = 0; i < 55; i++) {
@@ -232,7 +239,7 @@ describe('Automation 集成测试', () => {
     saveSources(configDir, DEFAULT_SOURCES_FILE);
 
     const { impl } = makeFakeScheduler();
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
     // start 不应抛错
     automation.start();
     // 没有运行任何任务
@@ -251,7 +258,7 @@ describe('Automation 集成测试', () => {
     saveAutomation(configDir, makeAutomationConfig());
 
     const { impl, calls } = makeFakeScheduler();
-    const automation = new Automation(impl, briefRepo, configDir, templatesDir, outputDir, log);
+    const automation = new Automation(impl, briefRepo, storyRepo, configDir, templatesDir, outputDir, log);
     await automation.runCollectNow();
 
     expect(calls).toHaveLength(1);

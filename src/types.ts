@@ -19,6 +19,40 @@ export interface Brief {
   _filePath?: string;
 }
 
+export interface StorySource {
+  briefId: string;
+  sourceId: string;
+  sourceName?: string;
+}
+
+export interface Story {
+  id: string;
+  date: string;
+  title: Record<string, string>;
+  summary: Record<string, string>;
+  tags: string[];
+  category: string;
+  aspect: string;
+  customAttrs: Record<string, string>;
+  status: string;
+  sources: StorySource[];
+  agentMeta?: {
+    processedAt?: string;
+    tool?: string;
+    model?: string;
+    version?: number;
+    changes?: string[];
+    notes?: string;
+  };
+  body?: string;
+  _filePath?: string;
+}
+
+export interface ProfileInfo {
+  id: string;
+  name: string;
+}
+
 export interface DefaultBinding {
   aspect: string;
   templateId: string;

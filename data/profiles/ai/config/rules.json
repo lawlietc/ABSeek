@@ -1,0 +1,65 @@
+{
+  "industryKeywords": [
+    "artificial intelligence", "machine learning", "deep learning",
+    "llm", "large language model", "foundation model", "multimodal",
+    "openai", "anthropic", "deepseek", "google deepmind", "meta ai",
+    "mistral", "cohere", "xai", "x ai", "perplexity", "hugging face",
+    "gpt", "claude", "gemini", "llama", "qwen", "kimi", "doubao",
+    "chatgpt", "copilot", "gemma", "mistral", "midjourney", "stable diffusion",
+    "sora", "whisper", "diffusion", "transformer", "neural network",
+    "agent", "ai agent", "autonomous agent", "rag", "fine-tune", "finetune",
+    "fine tuning", "pretraining", "pre-training", "inference", "training run",
+    "gpu", "nvidia", "h100", "b200", "cuda", "tpu", "datacenter", "data center",
+    "ai chip", "ai accelerator", "inference cost", "token", "context window",
+    "model release", "model launch", "open weights", "open-source model",
+    "benchmark", "mmlu", "arena", "elo", "reasoning model", "agi",
+    "ai safety", "alignment", "red team", "ai regulation", "ai act",
+    "generative ai", "genai", "ai startup", "ai funding", "ai investment"
+  ],
+  "aspectRules": {
+    "definition": "A=对用户/AI 从业者是利好（新模型、能力提升、降价、开源），B=负面（安全风险、封禁、裁员、政策收紧）；无法判断留空",
+    "aKeywords": [
+      "release", "released", "launch", "launched", "unveil", "unveiled",
+      "announce", "announced", "new model", "new feature", "upgrade",
+      "open source", "open-sourced", "open weights", "free", "free tier",
+      "price cut", "price drop", "discount", "cheaper", "cost reduction",
+      "faster", "smarter", "state-of-the-art", "sota", "outperform",
+      "record", "milestone", "funding", "raised", "partnership",
+      "acquisition", "buyout", "breakthrough", "improve", "improved"
+    ],
+    "bKeywords": [
+      "ban", "banned", "block", "blocked", "restrict", "restricted",
+      "shutdown", "shut down", "discontinue", "discontinued",
+      "layoff", "layoffs", "fired", "job cut", "redundancy",
+      "lawsuit", "sued", "legal trouble", "lawsuit",
+      "security flaw", "vulnerability", "exploit", "hacked", "data breach",
+      "safety concern", "safety risk", "unsafe", "harmful", "bias",
+      "regulation", "regulatory", "restriction", "crackdown", "export control",
+      "banned in", "fine", "penalty", "lawsuit", "lawsuit filed",
+      "cancelled", "canceled", "delayed", "postpone", "recall",
+      "crash", "downtime", "outage", "quality decline"
+    ]
+  },
+  "tagRules": [
+    { "tag": "发布", "keywords": ["release", "released", "launch", "launched", "unveil", "announce"] },
+    { "tag": "开源", "keywords": ["open source", "open-sourced", "open weights"] },
+    { "tag": "融资", "keywords": ["funding", "raised", "series a", "series b", "valuation"] },
+    { "tag": "安全", "keywords": ["safety", "alignment", "security flaw", "vulnerability", "red team"] },
+    { "tag": "政策", "keywords": ["regulation", "regulatory", "ai act", "ban", "export control"] },
+    { "tag": "裁员", "keywords": ["layoff", "layoffs", "fired", "job cut"] },
+    { "tag": "收购", "keywords": ["acquisition", "acquire", "acquired", "buyout", "merge"] },
+    { "tag": "评测", "keywords": ["benchmark", "mmlu", "arena", "elo", "score"] },
+    { "tag": "硬件", "keywords": ["gpu", "nvidia", "h100", "b200", "tpu", "ai chip"] },
+    { "tag": "研究", "keywords": ["paper", "research", "arxiv", "technical report"] }
+  ],
+  "importance": {
+    "high": [
+      "breakthrough", "state-of-the-art", "sota", "agi", "frontier model",
+      "major release", "shutdown", "cancelled", "layoff", "lawsuit",
+      "regulation", "ban", "security flaw", "data breach", "acquisition",
+      "record", "milestone", "raise", "funding"
+    ],
+    "medium": ["new model", "release", "open source", "upgrade", "benchmark", "partnership"]
+  },
+  "llmGuide": "判断资讯是否属于 AI 领域（模型/产品/公司/硬件/政策/研究）；不属于 → excluded。A=利好（新模型、开源、降价），B=负面（安全风险、封禁、裁员、政策收紧），无法判断留空。"
+}

@@ -6,31 +6,42 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { BriefRepo } from '../electron/main/store/briefRepo';
+import { StoryRepo } from '../electron/main/store/storyRepo';
+import { resolveProfileDataDir } from '../electron/main/store/profile';
+import {
+  loadProfileRules,
+  isInIndustry,
+  judgeAspect,
+  extractTags,
+  judgeImportance,
+} from '../electron/main/rules/profileRules';
 import { Collector } from '../electron/main/collector/collector';
 import { Scheduler } from '../electron/main/collector/scheduler';
 import { detectDuplicates } from '../electron/main/collector/duplicateDetector';
 import { loadSources } from '../electron/main/store/configRepo';
-import { runAutoExport } from '../electron/main/core/autoExport';
+import { runAutoExport, runStoryAutoExport } from '../electron/main/core/autoExport';
 import {
   loadDefaultBindings,
   loadTemplateConfig,
   paginate,
 } from '../electron/main/core/router';
-import { renderHtml, flattenForLang } from '../electron/main/core/render';
+import { renderHtml, flattenForLang, flattenStoryForLang } from '../electron/main/core/render';
 import { screenshot, closeBrowser } from '../electron/main/core/screenshot';
 import { ensureAgentGuide } from '../electron/main/store/agentGuide';
 import { createLogger } from '../electron/main/logger/logger';
 
 // ============ 路径解析 ============
 
-function resolvePaths(dataDirFlag?: string) {
+function resolvePaths(dataDirFlag?: string, profileId?: string) {
   const ROOT = process.cwd();
-  const DATA_DIR = dataDirFlag || path.join(ROOT, 'data');
+  const DATA_DIR = dataDirFlag || resolveProfileDataDir(ROOT, profileId);
   return {
     ROOT,
     DATA_DIR,
+    PROFILE_ID: profileId || 'game',
     CONFIG_DIR: path.join(DATA_DIR, 'config'),
     BRIEFS_DIR: path.join(DATA_DIR, 'briefs'),
+    STORIES_DIR: path.join(DATA_DIR, 'stories'),
     INVALID_DIR: path.join(DATA_DIR, '_invalid'),
     LOGS_DIR: path.join(DATA_DIR, 'logs'),
     TEMPLATES_DIR: path.join(ROOT, 'templates'),
@@ -99,7 +110,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     } else {
       if (!result.command) {
         result.command = arg;
-      } else if (result.command === 'brief' && !result.subcommand) {
+      } else if (
+        (result.command === 'brief' || result.command === 'story') &&
+        !result.subcommand
+      ) {
         result.subcommand = arg;
       } else {
         result.positional.push(arg);
@@ -133,17 +147,21 @@ const USAGE = `ABSeek CLI - 让外部 agent 通过命令行编排 采集→处�
 
 命令:
   collect [--source <id>|--all]       采集资讯（单源或全部启用源）
-  brief list [options]                列出简讯
-  brief get <id> [options]            查看单条简讯
-  brief save <id> --set <k=v>...      修改简讯字段
+  brief list [options]                列出信源简报
+  brief get <id> [options]            查看单条信源简报
+  brief save <id> --set <k=v>...      修改信源简报字段
   brief process --auto                规则化批量处理 raw 简讯
   brief dedup --auto                  跨源重复检测（process 之后、export 之前）
-  export [options]                    按模板出图
+  story list [options]                列出展示简讯
+  story get <id> [options]            查看单条展示简讯
+  story save <id> --set <k=v>...      修改展示简讯字段
+  export [options]                    按模板出图（数据源为展示简讯 stories）
   bindings list                       查看 aspect→模板绑定
   guide                               打印 AGENT_GUIDE.md 路径
 
 通用选项:
   --data-dir <path>                   指定数据目录（默认 ./data）
+  --profile <id>                      指定 profile（默认 game；其他用 data/profiles/<id>/）
   --json                              输出 JSON 格式（便于 agent 解析）
   --help                              显示帮助
 
@@ -164,6 +182,14 @@ brief dedup --auto 选项:
   --date <YYYY-MM-DD>                 只检测指定日期（默认全部 processed）
   --dry-run                           只输出检测结果，不写回文件
   跨源重复检测：同事件的多个简讯聚类→按来源优先级选主→其余置 duplicate
+
+story list 选项:
+  --status <s>                        按状态筛选（raw/processed/reviewed/exported/excluded/duplicate）
+  --date <YYYY-MM-DD>                 按日期筛选
+  --format <compact>                  紧凑输出（id | status | aspect | title）
+
+story save 选项:
+  --set <key=value>                   设置字段（可多次），支持: aspect,status,category,tags
 
 export 选项:
   --date <YYYY-MM-DD>                 指定日期（默认今天）
@@ -186,7 +212,7 @@ export 选项:
 
 /** collect [--source <id>|--all] */
 async function cmdCollect(args: ParsedArgs, paths: Paths, asJson: boolean) {
-  const log = createLogger('cli', paths.LOGS_DIR);
+  const log = createLogger('cli', paths.LOGS_DIR, !asJson);
   const briefRepo = new BriefRepo(paths.BRIEFS_DIR, paths.INVALID_DIR, log);
   const collector = new Collector(briefRepo, log);
   const scheduler = new Scheduler(collector, paths.CONFIG_DIR, log);
@@ -229,7 +255,7 @@ async function cmdCollect(args: ParsedArgs, paths: Paths, asJson: boolean) {
 
 /** brief list / get / save */
 async function cmdBrief(args: ParsedArgs, paths: Paths, asJson: boolean) {
-  const log = createLogger('cli', paths.LOGS_DIR);
+  const log = createLogger('cli', paths.LOGS_DIR, !asJson);
   const briefRepo = new BriefRepo(paths.BRIEFS_DIR, paths.INVALID_DIR, log);
   const sub = args.subcommand;
 
@@ -359,7 +385,7 @@ async function cmdBrief(args: ParsedArgs, paths: Paths, asJson: boolean) {
       console.error('目前只支持 --auto 模式: abseek brief process --auto');
       process.exit(1);
     }
-    const result = cmdBriefProcessAuto(briefRepo, dryRun);
+    const result = cmdBriefProcessAuto(briefRepo, paths.CONFIG_DIR, dryRun);
     if (asJson) {
       console.log(JSON.stringify(result, null, 2));
     } else {
@@ -400,6 +426,135 @@ async function cmdBrief(args: ParsedArgs, paths: Paths, asJson: boolean) {
   process.exit(1);
 }
 
+/** story list / get / save */
+async function cmdStory(args: ParsedArgs, paths: Paths, asJson: boolean) {
+  const log = createLogger('cli', paths.LOGS_DIR, !asJson);
+  const storyRepo = new StoryRepo(paths.STORIES_DIR, paths.INVALID_DIR, log);
+  const sub = args.subcommand;
+
+  if (sub === 'list') {
+    const status = flag(args, 'status');
+    const date = flag(args, 'date');
+    const format = flag(args, 'format');
+    const needAll = status === 'excluded' || status === 'duplicate';
+    let stories = needAll ? storyRepo.listAll() : storyRepo.list();
+
+    if (status) {
+      stories = stories.filter((s) => s.status === status);
+    }
+    if (date) {
+      stories = stories.filter((s) => s.date?.substring(0, 10) === date);
+    }
+
+    if (asJson) {
+      console.log(JSON.stringify(stories, null, 2));
+    } else if (format === 'compact') {
+      for (const s of stories) {
+        const title = s.title?.zh || s.title?.en || '(无标题)';
+        console.log(`${s.id} | ${s.status} | ${s.aspect || '-'} | ${title}`);
+      }
+      console.log(`共 ${stories.length} 条`);
+    } else {
+      if (stories.length === 0) {
+        console.log('（无展示简讯）');
+        return;
+      }
+      for (const s of stories) {
+        const title = s.title.zh || s.title.en || Object.values(s.title)[0] || '(无标题)';
+        console.log(`  ${s.id} [${s.status}] [${s.aspect || '-'}] ${title}`);
+      }
+      console.log(`共 ${stories.length} 条`);
+    }
+    return;
+  }
+
+  if (sub === 'get') {
+    const id = args.positional[0];
+    if (!id) {
+      console.error('用法: abseek story get <id>');
+      process.exit(1);
+    }
+    const story = storyRepo.getById(id);
+    if (!story) {
+      console.error(`展示简讯不存在: ${id}`);
+      process.exit(1);
+    }
+    if (asJson) {
+      console.log(JSON.stringify(story, null, 2));
+    } else {
+      console.log(`ID:     ${story.id}`);
+      console.log(`日期:   ${story.date}`);
+      console.log(`状态:   ${story.status}`);
+      console.log(`Aspect: ${story.aspect || '(未分面)'}`);
+      console.log(`分类:   ${story.category}`);
+      console.log(`标签:   ${story.tags.join(', ')}`);
+      const titleZh = story.title.zh;
+      const titleEn = story.title.en;
+      if (titleZh) console.log(`标题(zh): ${titleZh}`);
+      if (titleEn) console.log(`标题(en): ${titleEn}`);
+      const sumZh = story.summary.zh;
+      const sumEn = story.summary.en;
+      if (sumZh) console.log(`摘要(zh): ${sumZh}`);
+      if (sumEn) console.log(`摘要(en): ${sumEn}`);
+      if (story.sources.length > 0) {
+        console.log(`信源(${story.sources.length}): ${story.sources.map((s) => s.sourceName || s.sourceId).join(', ')}`);
+      }
+      if (story._filePath) console.log(`文件:   ${story._filePath}`);
+    }
+    return;
+  }
+
+  if (sub === 'save') {
+    const id = args.positional[0];
+    if (!id) {
+      console.error('用法: abseek story save <id> --set <key=value>...');
+      process.exit(1);
+    }
+    const sets = multiFlag(args, 'set');
+    if (sets.length === 0) {
+      console.error('请至少指定一个 --set <key=value>');
+      process.exit(1);
+    }
+
+    const story = storyRepo.getById(id);
+    if (!story) {
+      console.error(`展示简讯不存在: ${id}`);
+      process.exit(1);
+    }
+
+    const update: Record<string, unknown> = { id, _filePath: story._filePath };
+    for (const s of sets) {
+      const eqIdx = s.indexOf('=');
+      if (eqIdx < 0) {
+        console.error(`--set 格式错误（应为 key=value）: ${s}`);
+        process.exit(1);
+      }
+      const key = s.slice(0, eqIdx);
+      const value = s.slice(eqIdx + 1);
+      if (key === 'tags') {
+        update.tags = value.split(',').map((t) => t.trim()).filter(Boolean);
+      } else if (['aspect', 'status', 'category'].includes(key)) {
+        update[key] = value;
+      } else {
+        console.error(`不支持的字段: ${key}（支持: aspect, status, category, tags）`);
+        process.exit(1);
+      }
+    }
+
+    const ok = storyRepo.save(update as any);
+    if (asJson) {
+      console.log(JSON.stringify({ success: ok, id, updated: update }, null, 2));
+    } else {
+      console.log(ok ? `已保存 ${id}` : `保存失败 ${id}`);
+    }
+    return;
+  }
+
+  console.error(`未知子命令: story ${sub}`);
+  console.log(USAGE);
+  process.exit(1);
+}
+
 // ============ brief process --auto 规则化批处理 ============
 
 interface BriefProcessResult {
@@ -412,121 +567,21 @@ interface BriefProcessResult {
   items: { id: string; action: string; aspect: string }[];
 }
 
-// 游戏行业相关词：命中任一即视为游戏行业（保留处理）
-const GAMING_KEYWORDS = [
-  // 通用
-  'game', 'games', 'gaming', 'gamer', 'video game',
-  // 平台 / 厂商
-  'playstation', 'ps5', 'ps4', 'xbox', 'nintendo', 'switch', 'steam', 'valve',
-  'epic games', 'sega', 'ubisoft', 'activision', 'blizzard', 'capcom',
-  'square enix', 'fromsoftware', 'bandai', 'namco', 'bethesda', 'cd projekt',
-  'rockstar', 'take-two', 'tencent games', 'netease', 'sony interactive',
-  'microsoft gaming', 'riot games', 'bandai namco', 'konami', 'ncsoft',
-  // 类型
-  'rpg', 'fps', 'moba', 'mmo', 'jrpg', 'roguelike', 'soulslike',
-  'battle royale', 'platformer', 'shooter', 'metroidvania',
-  // 内容 / 形态
-  'dlc', 'expansion', 'patch', 'update', 'sequel', 'prequel', 'remake',
-  'remaster', 'beta', 'demo', 'early access', 'gameplay', 'trailer',
-  'reveal', 'season pass', 'battle pass', 'microtransaction', 'loot box',
-  'gacha', 'free-to-play', 'f2p', 'pay-to-win',
-  // 事件
-  'release', 'launch', 'delay', 'cancel', 'shutdown', 'review', 'score',
-  'rating', 'goty', 'e3', 'gamescom', 'tgs', 'summer game fest',
-  'nintendo direct', 'state of play', 'xbox showcase', 'playstation showcase',
-  // 知名 IP
-  'genshin', 'honkai', 'zelda', 'mario', 'pokemon', 'pokémon',
-  'call of duty', 'fifa', 'madden', 'nba 2k', 'grand theft auto', 'gta',
-  'cyberpunk', 'witcher', 'elden ring', 'dark souls', 'minecraft',
-  'fortnite', 'apex', 'valorant', 'league of legends', 'csgo',
-  'counter-strike', 'dota', 'overwatch', 'destiny', 'halo',
-  'god of war', 'spider-man', 'batman', 'final fantasy', 'dragon quest',
-  'metroid', 'kirby', 'smash bros', 'animal crossing',
-];
-
-// B 面关键词（对玩家是坏消息）
-const B_KEYWORDS = [
-  'delay', 'delayed', 'postpone', 'postponed', 'push back', 'pushed back',
-  'cancel', 'cancelled', 'canceled', 'abandon',
-  'shutdown', 'shut down', 'server closure', 'end of life', 'discontinued',
-  'price hike', 'price increase', 'price raise', 'more expensive',
-  'layoff', 'layoffs', 'fired', 'sacked', 'redundancy', 'job cut',
-  'review bomb', 'low review', 'bad review', 'poor review', 'panned',
-  'slammed', 'criticized', 'buggy', 'broken', 'unplayable', 'worst',
-  'microtransaction', 'loot box', 'pay-to-win', 'p2w', 'grindy',
-  'lawsuit', 'sued', 'patent infringement', 'legal trouble',
-  'delayed indefinitely', 'no longer in development',
-];
-
-// A 面关键词（对玩家是好消息）
-const A_KEYWORDS = [
-  'new game', 'announce', 'announced', 'reveal', 'revealed', 'unveil',
-  'unveiled', 'teaser', 'teased',
-  'release date', 'launch date', 'coming out', 'launching',
-  'dlc', 'expansion', 'free update', 'free dlc', 'free content',
-  'patch', 'content update', 'new content',
-  'discount', 'sale', 'price cut', 'price drop', 'free-to-play',
-  'acclaimed', 'praised', 'award', 'goty', 'high review', 'good review',
-  '10/10', '9/10', 'masterpiece', 'must-play', 'game of the year',
-  'best-selling', 'record sales', 'milestone',
-];
-
-function isGamingRelated(text: string): boolean {
-  return GAMING_KEYWORDS.some((kw) => text.includes(kw));
-}
-
-function judgeAspect(text: string): string {
-  const hasB = B_KEYWORDS.some((kw) => text.includes(kw));
-  const hasA = A_KEYWORDS.some((kw) => text.includes(kw));
-  if (hasB && !hasA) return 'B';
-  if (hasA && !hasB) return 'A';
-  if (hasA && hasB) return 'B'; // 同时命中好坏词，按 B 处理（坏消息更值得关注）
-  return ''; // 无法判断
-}
-
-function extractTags(text: string, existingTags: string[]): string[] {
-  const tags = new Set(existingTags);
-  const tagRules: [string, string[]][] = [
-    ['DLC', ['dlc', 'expansion', 'season pass', 'battle pass']],
-    ['延期', ['delay', 'delayed', 'postpone', 'push back']],
-    ['取消', ['cancel', 'cancelled', 'canceled', 'abandon']],
-    ['发售', ['release date', 'launch date', 'release', 'launch']],
-    ['评分', ['review', 'score', 'rating', 'goty', 'metacritic']],
-    ['财报', ['earnings', 'revenue', 'quarterly', 'fiscal', 'financial']],
-    ['人事变动', ['layoff', 'layoffs', 'fired', 'resign', 'hire', 'ceo']],
-    ['更新', ['patch', 'update', 'free update', 'content update']],
-    ['诉讼', ['lawsuit', 'sued', 'patent', 'legal']],
-    ['测试', ['beta', 'demo', 'early access', 'alpha', 'closed beta']],
-    ['关停', ['shutdown', 'shut down', 'server closure', 'end of life']],
-  ];
-  for (const [tag, kws] of tagRules) {
-    if (kws.some((kw) => text.includes(kw))) tags.add(tag);
-  }
-  return Array.from(tags);
-}
-
-function judgeImportance(text: string): string {
-  const highKeywords = [
-    'goty', 'shutdown', 'cancelled', 'delayed', 'major delay',
-    'acquisition', 'announce', 'revealed', 'release date',
-    'layoff', 'lawsuit', 'game of the year', 'masterpiece',
-  ];
-  if (highKeywords.some((kw) => text.includes(kw))) return 'high';
-  const mediumKeywords = ['sequel', 'remake', 'remaster', 'new game', 'dlc', 'expansion', 'beta'];
-  if (mediumKeywords.some((kw) => text.includes(kw))) return 'medium';
-  return 'low';
-}
-
 /**
  * brief process --auto：规则化批量处理 raw 简讯
- * - 行业判断：非游戏 → excluded
- * - AB 面判断（关键词规则）：能判则判，不能判留空
+ * - 行业判断（按 profile rules）：非本领域 → excluded
+ * - 双面判断（关键词规则，规则可配置）：能判则判，不能判留空
  * - 标签提取 / 重要性评估 / 状态流转
  * - 不做翻译（title.zh 留空，出图时 onMissingLang=fallback 用 en）
  *
  * agent 可选用此命令做"快速预处理"，后续对需要精修的简讯再用 LLM 补翻译/调整 aspect。
  */
-function cmdBriefProcessAuto(briefRepo: BriefRepo, dryRun: boolean): BriefProcessResult {
+function cmdBriefProcessAuto(
+  briefRepo: BriefRepo,
+  configDir: string,
+  dryRun: boolean
+): BriefProcessResult {
+  const rules = loadProfileRules(configDir);
   const rawBriefs = briefRepo.list().filter((b) => b.status === 'raw');
   const items: { id: string; action: string; aspect: string }[] = [];
   let success = 0;
@@ -549,8 +604,8 @@ function cmdBriefProcessAuto(briefRepo: BriefRepo, dryRun: boolean): BriefProces
         .join(' ')
         .toLowerCase();
 
-      // 1. 行业判断
-      if (!isGamingRelated(text)) {
+      // 1. 行业判断（按 profile rules）
+      if (!isInIndustry(rules, text)) {
         if (!dryRun) {
           briefRepo.save({
             id: brief.id,
@@ -561,7 +616,7 @@ function cmdBriefProcessAuto(briefRepo: BriefRepo, dryRun: boolean): BriefProces
               tool: 'cli-brief-process-auto',
               version: 1,
               changes: ['status'],
-              notes: 'CLI 规则判断: 非游戏行业 → excluded',
+              notes: 'CLI 规则判断: 非本领域 → excluded',
             },
           });
         }
@@ -570,10 +625,10 @@ function cmdBriefProcessAuto(briefRepo: BriefRepo, dryRun: boolean): BriefProces
         continue;
       }
 
-      // 2. AB 面判断 + 标签 + 重要性
-      const aspect = judgeAspect(text);
-      const tags = extractTags(text, brief.tags || []);
-      const importance = judgeImportance(text);
+      // 2. 双面判断 + 标签 + 重要性
+      const aspect = judgeAspect(rules, text);
+      const tags = extractTags(rules, text, brief.tags || []);
+      const importance = judgeImportance(rules, text);
 
       if (!dryRun) {
         briefRepo.save({
@@ -609,8 +664,8 @@ function cmdBriefProcessAuto(briefRepo: BriefRepo, dryRun: boolean): BriefProces
 
 /** export [--date] [--status] [--lang] [--briefIds] */
 async function cmdExport(args: ParsedArgs, paths: Paths, asJson: boolean) {
-  const log = createLogger('cli', paths.LOGS_DIR);
-  const briefRepo = new BriefRepo(paths.BRIEFS_DIR, paths.INVALID_DIR, log);
+  const log = createLogger('cli', paths.LOGS_DIR, !asJson);
+  const storyRepo = new StoryRepo(paths.STORIES_DIR, paths.INVALID_DIR, log);
 
   const date = flag(args, 'date') || new Date().toISOString().substring(0, 10);
   const lang = flag(args, 'lang') || 'zh';
@@ -623,7 +678,7 @@ async function cmdExport(args: ParsedArgs, paths: Paths, asJson: boolean) {
   if (briefIdsFlag) {
     // 指定 ID 模式
     const ids = briefIdsFlag.split(',').map((s) => s.trim()).filter(Boolean);
-    result = await exportByIds(briefRepo, paths, ids, lang, date, log);
+    result = await exportByIds(storyRepo, paths, ids, lang, date, log);
   } else {
     // 按 status+date 筛选模式
     const statusFlag = flag(args, 'status') || 'processed,reviewed';
@@ -631,15 +686,15 @@ async function cmdExport(args: ParsedArgs, paths: Paths, asJson: boolean) {
 
     // --auto-date：当天没匹配简讯时，回退到最近有简讯的日期
     if (autoDate) {
-      const all = briefRepo.list();
+      const all = storyRepo.list();
       const hasToday = all.some(
-        (b) => b.date?.substring(0, 10) === date && statusFilter.includes(b.status)
+        (s) => s.date?.substring(0, 10) === date && statusFilter.includes(s.status)
       );
       if (!hasToday) {
         const dates = new Set<string>();
-        for (const b of all) {
-          if (statusFilter.includes(b.status) && b.date) {
-            dates.add(b.date.substring(0, 10));
+        for (const s of all) {
+          if (statusFilter.includes(s.status) && s.date) {
+            dates.add(s.date.substring(0, 10));
           }
         }
         const sorted = Array.from(dates).filter(Boolean).sort().reverse();
@@ -650,8 +705,8 @@ async function cmdExport(args: ParsedArgs, paths: Paths, asJson: boolean) {
       }
     }
 
-    result = await runAutoExport(
-      briefRepo,
+    result = await runStoryAutoExport(
+      storyRepo,
       paths.TEMPLATES_DIR,
       paths.CONFIG_DIR,
       paths.OUTPUT_DIR,
@@ -676,7 +731,7 @@ async function cmdExport(args: ParsedArgs, paths: Paths, asJson: boolean) {
 
 /** 按指定 ID 出图（复用渲染模块，逻辑与 index.ts export:current 一致） */
 async function exportByIds(
-  briefRepo: BriefRepo,
+  storyRepo: StoryRepo,
   paths: Paths,
   ids: string[],
   lang: string,
@@ -684,10 +739,10 @@ async function exportByIds(
   log: ReturnType<typeof createLogger>
 ): Promise<{ success: boolean; files: string[]; outputDir: string; briefCount: number; error?: string }> {
   try {
-    const allBriefs = briefRepo.list();
+    const allStories = storyRepo.list();
     const selected = ids
-      .map((id) => allBriefs.find((b) => b.id === id))
-      .filter((b): b is NonNullable<typeof b> => !!b);
+      .map((id) => allStories.find((s) => s.id === id))
+      .filter((s): s is NonNullable<typeof s> => !!s);
 
     if (selected.length === 0) {
       return { success: true, files: [], outputDir: '', briefCount: 0 };
@@ -699,12 +754,12 @@ async function exportByIds(
     const files: string[] = [];
 
     for (const binding of bindings) {
-      const aspectBriefs = selected.filter((b) => b.aspect === binding.aspect);
-      if (aspectBriefs.length === 0) continue;
+      const aspectStories = selected.filter((s) => s.aspect === binding.aspect);
+      if (aspectStories.length === 0) continue;
 
       const config = loadTemplateConfig(paths.TEMPLATES_DIR, binding.templateId);
-      const flat = aspectBriefs
-        .map((b) => flattenForLang(b, lang, config.output.onMissingLang))
+      const flat = aspectStories
+        .map((s) => flattenStoryForLang(s, lang, config.output.onMissingLang))
         .filter((x): x is NonNullable<typeof x> => !!x);
       const pages = paginate(flat, config.limit.maxBriefs);
 
@@ -815,7 +870,8 @@ async function main() {
   }
 
   const dataDir = flag(args, 'data-dir');
-  const paths = resolvePaths(dataDir);
+  const profileId = flag(args, 'profile');
+  const paths = resolvePaths(dataDir, profileId);
   const asJson = flagBool(args, 'json');
   const cmdLine = reconstructCmdLine();
 
@@ -830,6 +886,9 @@ async function main() {
         break;
       case 'brief':
         await cmdBrief(args, paths, asJson);
+        break;
+      case 'story':
+        await cmdStory(args, paths, asJson);
         break;
       case 'export':
         await cmdExport(args, paths, asJson);

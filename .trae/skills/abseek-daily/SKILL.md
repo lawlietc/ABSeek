@@ -1,11 +1,11 @@
 ---
 name: "abseek-daily"
-description: "ABSeek 每日资讯出图自动化流程：采集资讯→处理简讯md文件→匹配模板出图。Invoke when user wants to run daily news collection+processing+export pipeline, or asks for 每日资讯/采集出图/abseek daily."
+description: "ABSeek 每日资讯出图自动化流程：采集资讯→处理信源→生成展示简讯→匹配模板出图。Invoke when user wants to run daily news collection+processing+export pipeline, or asks for 每日资讯/采集出图/abseek daily."
 ---
 
 # ABSeek 每日资讯出图流程
 
-本 skill 编排 ABSeek 项目的完整出图链路：采集 → 处理简讯 → 出图。所有步骤通过 `abseek` CLI 命令 + 直接读写 md 文件完成。
+本 skill 编排 ABSeek 项目的完整出图链路：采集（信源简报）→ 处理信源 → 生成展示简讯 → 出图。所有步骤通过 `abseek` CLI 命令 + 直接读写 md 文件完成。本流程**按 profile 泛化**：领域判断与分类规则不再写死为「游戏」，而是读取当前 profile 的 `rules.json`。
 
 ## 前置条件
 
@@ -13,14 +13,32 @@ description: "ABSeek 每日资讯出图自动化流程：采集资讯→处理�
 - CLI 已构建：`out/main/cli.js` 存在（若不存在，先跑 `npm run build`）
 - 调用方式：`node out/main/cli.js <command> [options]`（下文统一用 `abseek` 代指）
 - 协作规范：`data/AGENT_GUIDE.md`（处理 md 文件前必读）
+- **profile**：默认 `game`；其他 profile 用 `--profile <id>`（如 AI 资讯用 `--profile ai`）。判断规则以 `data/profiles/<id>/config/rules.json`（或 `data/config/rules.json`）为准。
+- **profile 完整性**：`--profile <id>` 要求该 profile 目录完整（`config/rules.json`、`config/sources.json`、`briefs/`、`stories/`）。当前已配置 `game`（`data/config/`）与 `ai`（`data/profiles/ai/`）。目标 profile 不完整时，提示用户或回退 `game`，不要凭记忆臆造规则。
 
-## 完整流程（6 步）
+## 数据模型（关键）
 
-### 第 1 步：采集资讯
+- **信源简报 brief**（`data/briefs/`，非 game profile 为 `data/profiles/<id>/briefs/`）：采集写入，**只作信息源引用，不被编辑成展示**。
+- **展示简讯 story**（`data/stories/`，非 game profile 为 `data/profiles/<id>/stories/`）：agent 依据信源**聚合生成**，是**出图的唯一数据源**。展示内容完全可控，可引用多个信源。
+
+## 解析 JSON 输出的三个坑（必读）
+
+1. **stdout 纯净性**：CLI 的 `--json` 模式已关闭日志控制台输出（logger 只写文件），stdout 应只有 JSON。若仍解析失败，用 `out.indexOf('{')` 截取 JSON 起点再 parse。
+2. **不要用 PowerShell 重定向/管道解析 JSON**：`> file` 会按 GBK 编码写盘导致中文乱码、`JSON.parse` 报 `Bad control character`。应直接用 Node 调用并解析，例如：
+   ```bash
+   node -e "const{execSync}=require('child_process');const r=JSON.parse(execSync('node out/main/cli.js brief list --status raw --json',{encoding:'utf8'}));console.log('count='+r.length)"
+   ```
+3. **输出过大时**：`brief list --json`（数千条）可能触发管道缓冲上限（ENOBUFS），改用 `--format compact` + `--status`/`--date` 缩小范围。
+
+## 完整流程（7 步 + 可选去重）
+
+### 第 1 步：采集资讯（信源简报）
 
 ```bash
 node out/main/cli.js collect --all --json
 ```
+
+（AI profile：`node out/main/cli.js --profile ai collect --all --json`）
 
 **输出**（JSON）：
 ```json
@@ -32,284 +50,235 @@ node out/main/cli.js collect --all --json
 - `totalNew=0` → 流程结束，告知用户「今日无新资讯」
 - 全部失败 → 告知用户错误信息，流程终止
 
-### 第 2 步：拉取待处理简讯清单
+### 第 2 步：拉取待处理信源清单
 
 ```bash
 node out/main/cli.js brief list --status raw --json
 ```
 
-**输出**：简讯数组，每条含 `id` / `_filePath` / `title` / `summary` / `source` / `date` 等。
+**输出**：信源简报数组，每条含 `id` / `_filePath` / `title` / `summary` / `source` / `date` 等。
 
-**记录**：保存 `count`（待处理总数），用于最后汇总。
+**记录**：保存 `count`（待处理总数）。
 
-### 第 3 步：逐条处理简讯（agent 核心工作）
+### 第 3 步：读取 profile 判断规则（存在则读，否则用内建默认）
 
-#### 3.0 开始前状态重校验（必须）
-
-进入 STEP3 后，**先重新拉取一次 raw 简讯清单**确认数量，不要直接用 STEP2 的结果：
+进入 STEP3 前，**读取当前 profile 的 rules.json**（判断标准以它为准，不要凭记忆或写死）：
 
 ```bash
-node out/main/cli.js brief list --status raw --json
+node out/main/cli.js guide   # 打印 AGENT_GUIDE.md 路径
 ```
 
-- 如果返回 `[]` 或数量为 0：说明期间状态已变化（可能被 GUI 或其他流程处理过），**跳过 STEP3，直接进入 STEP4（去重）**
-- 数量 > 0：以这次拉取的清单为准，继续逐条处理
+然后读取 profile 的规则文件（二选一，看哪个存在）：
+- `data/profiles/<id>/config/rules.json`
+- `data/config/rules.json`
 
-这一步避免「STEP2 拉到 N 条，STEP3 执行时 raw=0」的状态不一致问题。
+`rules.json` 含：
+- `industryKeywords`：领域判定词（命中任一视为属于本领域，否则 `excluded`）
+- `aspectRules.aKeywords / bKeywords`：双面分类关键词（A / B，无法判断留空）
+- `tagRules`：标签 → 关键词
+- `importance.high / medium`：重要性评估
+- `llmGuide`：给 agent / LLM 的自然语言判断指引
 
-> 💡 **可选快速预处理**：如果想跳过逐条读写 md 的重复劳动，可先跑 `node out/main/cli.js brief process --auto --json`，CLI 会用关键词规则批量完成行业判断/AB 面/标签/状态流转（不翻译，title.zh 留空）。之后 agent 只需对需要精修的简讯补翻译、调整 aspect。两种方式二选一，不要混用以免重复处理。
+> 若 `rules.json` 不存在（仅当目标 profile 未配置时），使用内建默认游戏规则（`loadProfileRules` 回退），不要自行臆造规则；判断完成后可在下方 STEP4 继续。
 
-对每条 raw 简讯，**直接读写 md 文件**（不用 `brief save` 命令，因为要改的字段多）。
+### 第 4 步：处理信源简报（先标记领域归属，可选用 --auto）
 
-#### 3.1 读取简讯文件
+对每条 raw 信源，可选先跑规则化快速预处理（判断领域归属 / 双面 / 打标 / 重要性，不翻译）：
 
-用 Read 工具读 `_filePath` 指向的 md 文件。文件结构：
+```bash
+node out/main/cli.js brief process --auto --json
 ```
+
+**也可直接逐条判断**：读取信源 md，依据 STEP3 的 `rules.json` 判断：
+- **领域判断（最先做）**：不属于本领域 → `status: excluded`，`agentMeta.notes` 说明排除原因，结束该条。
+- 属于本领域 → 保留，供 STEP5 聚合生成展示简讯。
+
+> 信源简报的标题/摘要**不要求**双语或 aspect（那些是展示简讯的职责）。信源只作为聚合的依据与溯源。
+
+### 第 4.5 步：跨源去重（可选但推荐）
+
+同一天多源重复报道很常见，先跑 CLI 去重，把同事件聚成一组（按来源优先级选主，其余置 `duplicate`），后续聚合更方便：
+
+```bash
+node out/main/cli.js brief dedup --auto --date <YYYY-MM-DD>
+```
+
+（AI profile：`node out/main/cli.js --profile ai brief dedup --auto --date <YYYY-MM-DD>`）
+
+**判定**：
+- 想看被合并的重复简讯：`node out/main/cli.js brief list --status duplicate --format compact`
+- dedup 只处理 `processed` 简讯，须在 STEP4 之后、STEP5 之前执行
+- 可用 `--dry-run` 先预览结果，确认无误再去掉该参数执行
+
+### 第 5 步：生成展示简讯（story，agent 核心工作）
+
+信源处理后，**依据信源聚合生成展示简讯**。展示简讯是出图内容，完全由 agent 自定义文案。
+
+> ⚠️ **规模控制**：一次采集可能成千上万条信源（如 685 条），**不要全量生成 story**。只挑选**当天代表性 / 重要事件**生成少量 story（建议 5~15 条），其余信源保留在 `briefs/` 作为数据源即可。
+
+#### 5.0 挑选候选事件（重要）
+
+先用已处理信源概览挑选要成 story 的事件：
+
+```bash
+node out/main/cli.js brief list --status processed --date <YYYY-MM-DD> --format compact
+```
+
+按标题去重/聚类肉眼挑选：
+- **同一事件多源报道** → 合并为一条 story（`sources` 列出所有信源）
+- **高重要性 / 玩家关注度高** → 优先入选
+- 从 `briefs/` 里选出 N 个候选事件，进入 5.1
+
+#### 5.1 信源聚合
+
+- 多个信源报道同一事件 → **生成一条 story**，在 `sources` 里列出所有对应信源的 `briefId` / `sourceId` / `sourceName`。
+- 优先基于 STEP4.5 的 dedup 结果：已被 dedup 聚类的同事件，直接用主简讯（`brief list --status duplicate` 可看被合并的从属简讯）；dedup 漏网的再手工合并。
+- `sourceCount` 不落盘，由 `sources.length` 推导（模板可展示「N 家媒体报道」）。
+
+#### 5.2 生成 story 文件
+
+**先查该日期已有 story 的 seq**（避免撞号）：
+
+```bash
+node out/main/cli.js story list --date <YYYY-MM-DD> --format compact
+```
+
+用 Write 工具写到 `data/stories/{YYYY-MM-DD}/` 下（非 game profile 为 `data/profiles/<id>/stories/{YYYY-MM-DD}/`；文件名 `{YYYYMMDD}-{seq}-{slug}.md`，seq 取已有最大+1）：
+
+```yaml
 ---
-<YAML frontmatter>
+id: 20260809-01-new-ai-model
+date: 2026-08-09T08:00:00+08:00
+title:
+  zh: 中文标题
+  en: English Title
+summary:
+  zh: 中文摘要
+  en: English summary
+tags: [模型, 发布]
+category: <按 profile>
+aspect: A            # 或 B / 自定义主题值，须与 default-bindings.json 匹配
+customAttrs:
+  importance: high
+status: processed
+sources:            # 聚合的信源（可多个）
+  - { briefId: "20260809-01-xxxxxx-ign-xxx", sourceId: "ign", sourceName: "IGN" }
+  - { briefId: "20260809-02-yyyyyy-arxiv-yyy", sourceId: "arxiv", sourceName: "arXiv" }
+agentMeta:
+  processedAt: 2026-08-09T08:05:00+08:00
+  tool: abseek-daily-skill
+  model: <写实际使用的模型名，禁止照抄占位符>   # agentMeta 整体可选，若写必须真实
+  version: 1
+  changes: [title, summary, aspect, tags, sources, status]
 ---
-<正文>
+正文（自定义，可含关键信息汇总）
 ```
 
-#### 3.2 处理内容（agent 用自身 LLM 能力完成）
-
-对每条简讯按顺序做以下处理：
-
-1. **行业判断（最先做）**：判断这条资讯是否属于游戏行业。**非游戏行业**的消息（如纯科技、纯财经、与游戏无关的硬件等）→ `status: excluded`，`agentMeta.notes` 说明排除原因，**结束该条处理**（不做翻译/分面/打标）
-2. **翻译**：`originalTitle` / `originalSummary` 是英文原文，生成中文填到 `title.zh` / `summary.zh`（保留 `title.en` / `summary.en`）
-3. **摘要精简**：如果原文摘要过长，精简到 50-80 字
-4. **判定 aspect**：根据内容判断分到 A 面还是 B 面，拿不准的保留未分面（参考下方分类规则）
-5. **打标签**：补充 tags（如 `DLC` / `财报` / `人事变动` 等）
-6. **重要性**：填 `customAttrs.importance`（high/medium/low）
-7. **状态流转**：`status: raw` → `status: processed`（excluded 的已在第 1 步处理）
-
-#### aspect 分类参考规则
-
-核心判断原则：**从玩家角度**看，这条消息是好消息还是坏消息。
-
-- **A 面（对玩家是好消息）**：新游戏公布、DLC、发售日、游戏降价、游戏评价好、评分高、免费更新等
-  - ⚠️ 注意区分「对玩家坏但对行业好」的消息，这类**不算 A 面**，例如：PS 取消实体光盘、游戏内购增多、订阅制涨价等
-- **B 面（对玩家是坏消息）**：游戏延期、DLC 取消、游戏涨价、评价低、评分低、服务器关停等
-  - ⚠️ 注意区分媒体评分和玩家评分：可能出现媒体评分高、玩家评分低的情况，此时应以**玩家评分**为准判为 B 面
-- **无法判断**：保留未分面状态（`aspect: ""`），`status` 仍设为 `processed`。出图时因 aspect 为空匹配不到模板，会自动跳过，不影响其他简讯出图
-
-#### 3.3 写回文件（必须遵循 AGENT_GUIDE 规范）
+**要点**：
+- `title` / `summary` 是对象 `{zh, en}`，不是字符串
+- **YAML 特殊字符必须加引号**：英文标题/摘要含冒号+空格（如 `Protest: ...`）、`#`、`[`、`]`、`{`、`}` 等时，值要用双引号包裹，否则 frontmatter 解析失败会被移入 `_invalid`（例如 `en: "A Demo: With Colon"`）
+- `tags` 必须是数组；`customAttrs` 必须是扁平对象
+- **不可修改字段**：`id` / `date`；`sources` 的 `briefId` 必须指向真实存在的信源
+- 文件名沿用 `{YYYYMMDD}-{seq}-{slug}.md` 规则，`seq` 在 stories 目录独立计数
+- `aspect` 取值必须匹配该 profile 的 `default-bindings.json`（可 A / B / 自定义主题）
 
 **写入方式（强制）**：先写 `.tmp` 再 rename，避免应用读到半截文件：
-
 ```
 xxx.md.tmp  →  写入完成  →  rename  →  xxx.md
 ```
+用 Write 工具写到 `<原路径>.tmp`，然后用 Rename-Item 完成原子替换。
 
-用 Write 工具写到 `<原路径>.tmp`，然后用 RunCommand 执行 `Rename-Item` 完成原子替换。
-
-**YAML 格式要求**：
-- `title` / `summary` 是对象：`{zh: 中文, en: English}`，不是字符串
-- `tags` 必须是数组
-- `customAttrs` 必须是扁平对象
-- 时间用 ISO 8601
-- 不可修改字段：`id` / `source` / `sourceUrl` / `date`
-- 文件名不变
-
-**agentMeta 必填**：
-```yaml
-agentMeta:
-  processedAt: 2026-07-30T08:05:00+08:00   # 当前时间
-  tool: trae-skill
-  model: <你用的模型名>
-  version: 1
-  changes: [title, summary, aspect, tags, customAttrs, status]
-  notes: 简短说明判定理由
-```
-
-#### 3.4 异常处理
-
-- 简讯内容为空或无法理解：`status: ignored`，`agentMeta.notes` 说明原因
-- 非游戏行业消息：`status: excluded`，`agentMeta.notes` 说明排除原因（见 3.2 第 1 步）
-- 无法判断 AB 面的消息：`status: processed`，`aspect: ""`（留空），出图时自动跳过
-- 单条处理失败：跳过，继续下一条，最后汇总失败数
+#### 5.3 异常处理
+- 信源内容无法理解：跳过该信源（不生成 story）
+- 单条 story 生成失败：跳过，继续下一条，最后汇总失败数
 - 不要因为单条失败终止整个流程
 
-### 第 4 步：跨源去重
+### 第 6 步：出图（数据源为展示简讯 stories）
 
-第 3 步处理完成后，简讯已变为 `processed` / `excluded` / `ignored`。由于多个信息源会报道同一事件，出图前必须先做跨源去重，确保同一日期同一事件最终只有一条简讯进入图片模板。
-
-```bash
-node out/main/cli.js brief dedup --auto --json
-```
-
-**作用**：
-- 扫描所有 `processed` 简讯，按日期窗口分组
-- 用标题相似度（Jaccard）+ 子串关系聚类，识别同一事件的多条简讯
-- 每个聚类按 `sources.json` 的 `priority` 字段选主（数字小优先；未配置视为最低优先级）
-- 主简讯保持 `processed`，其余标记为 `duplicate`（文件保留，`agentMeta.notes` 记录主简讯 id）
-- `brief list` 默认排除 `duplicate`，所以下一步出图只会拿到主简讯
-
-**输出**（JSON）：
-```json
-{ "success": true, "clusters": 3, "duplicates": 5, "primaryKept": 8, "details": [{ "primary": "20260730-01-xxx", "duplicates": ["20260730-05-yyy", "20260730-07-zzz"] }, ...] }
-```
-
-**判定**：
-- `success=true` → 继续（即使 `duplicates=0` 也正常，说明今日无重复）
-- 命令失败 → 告知用户错误，可跳过本步直接出图（去重不影响已 processed 简讯，只是可能出图含重复）
-
-**可选参数**：
-- `--date 2026-07-30`：只对指定日期去重（默认全量已 processed）
-- `--dry-run`：只输出会标记哪些，不实际改状态（预演用）
-
-**幂等性**：可重跑。已标记 `duplicate` 的不再参与聚类，新增信息源后重跑只会处理新进来的 processed 简讯。
-
-**查重记录**：被标记 `duplicate` 的简讯文件保留原位，`agentMeta.notes` 写入 `dedup: primary=<主简讯id>`。用以下命令查看全部重复记录：
+所有 story 生成完成（`status: processed`）后，**带日期出图**（story 可能补生成非今日内容，默认只导今天会漏）：
 
 ```bash
-node out/main/cli.js brief list --status duplicate --format compact
+node out/main/cli.js export --status processed --lang zh --date <YYYY-MM-DD> --auto-date --json
 ```
 
-> ⚠️ 去重依赖 `sources.json` 里每个源的 `priority` 字段。新增源时记得配 priority（建议：官方源=1，权威综合=2，中文源=3，聚合=4），否则选主时按默认最低优先级处理。
+（AI profile：`node out/main/cli.js --profile ai export --status processed --lang zh --date <YYYY-MM-DD> --auto-date --json`）
 
-### 第 5 步：出图
-
-所有 raw 简讯处理完成且去重完成后（简讯为 processed / excluded / ignored / duplicate 之一），执行：
-
-```bash
-node out/main/cli.js export --status processed --lang zh --json
-```
+> `--date` 与 STEP5 生成 story 的日期一致；`--auto-date` 当天无简讯时自动回退到最近有简讯的日期，兜底防止空导出。
 
 **输出**（JSON）：
 ```json
 {
   "success": true,
-  "files": ["2026-07-30-template-a-A-1-zh.jpg", "2026-07-30-template-a-A-2-zh.jpg", ...],
-  "outputDir": "D:\\LFolder\\AIProgram\\ABSeek\\output\\images\\2026-07-30",
+  "files": ["2026-08-09-template-a-A-1-zh.jpg", ...],
+  "outputDir": "D:\\LFolder\\AIProgram\\ABSeek\\output\\images\\2026-08-09",
   "briefCount": 8
 }
 ```
 
-### 第 6 步：确认生图结果（三层校验）
+### 第 7 步：确认生图结果（三层校验）
 
-agent 必须向用户汇报生图结果，三层校验确保可信：
+#### 7.1 检查 CLI 返回值
+从 `export` 的 JSON 提取 `success` / `files` 长度 / `outputDir` / `briefCount`。
 
-#### 6.1 检查 CLI 返回值
-
-从 `export` 的 JSON 输出提取：
-- `success` 是否为 true
-- `files` 数组长度（生成几张图）
-- `outputDir`（输出目录绝对路径）
-- `briefCount`（参与出图的简讯数）
-
-#### 6.2 实际核对文件存在
-
-用 Glob 或 LS 工具检查 `outputDir` 下是否真的有 `files` 列出的文件：
-
+#### 7.2 实际核对文件存在
 ```
 Glob pattern: output/images/<date>/*.jpg
 ```
+对比实际文件数与 `files.length`。
 
-对比实际文件数与 `files.length`。若不一致，说明有遗漏，需排查。
-
-#### 6.3 汇总报告
-
-向用户输出结构化汇总，格式：
-
+#### 7.3 汇总报告
+向用户输出结构化汇总：
 ```
 ## 今日资讯出图完成
-
-**采集**：3 个源，新增 12 条简讯
-**处理**：成功 10 条（A 面 6 条 / B 面 4 条），忽略 2 条
-**去重**：标记 5 条重复（保留 8 条主简讯，重复记录可用 `brief list --status duplicate` 查询）
-**出图**：生成 4 张图片
-  - 2026-07-30-template-a-A-1-zh.jpg (A 面第 1 页)
-  - 2026-07-30-template-a-A-2-zh.jpg (A 面第 2 页)
-  - 2026-07-30-template-a-B-1-zh.jpg (B 面第 1 页)
-  - 2026-07-30-template-a-B-2-zh.jpg (B 面第 2 页)
-**输出目录**：D:\LFolder\AIProgram\ABSeek\output\images\2026-07-30
-**文件核对**：实际 4 个文件，与预期一致 ✓
-
-**忽略的简讯**：
-  - <id>：<原因>
+**采集**：N 个源，新增 X 条信源
+**信源处理**：保留 X 条 / 排除 Y 条
+**展示简讯**：生成 M 条（引用信源数合计 K）
+**出图**：生成 N 张图片
+  - <filename> (<aspect> 第 i 页)
+**输出目录**：<outputDir>
+**文件核对**：实际 N 个文件，与预期一致 ✓
 ```
 
 ## 命令速查
 
 | 命令 | 作用 |
 |---|---|
-| `node out/main/cli.js collect --all --json` | 采集全部启用源 |
-| `node out/main/cli.js brief list --status raw --json` | 列待处理简讯 |
-| `node out/main/cli.js brief list --status processed --json` | 列已处理简讯（校验用） |
-| `node out/main/cli.js brief dedup --auto --json` | 跨源去重（出图前必跑，可加 `--date` / `--dry-run`） |
-| `node out/main/cli.js brief list --status duplicate --format compact` | 查看被去重的简讯记录 |
-| `node out/main/cli.js export --status processed --lang zh --json` | 出图 |
+| `node out/main/cli.js collect --all --json` | 采集全部启用源（信源） |
+| `node out/main/cli.js brief list --status raw --json` | 列待处理信源 |
+| `node out/main/cli.js brief process --auto --json` | 规则化处理信源（领域/双面/打标） |
+| `node out/main/cli.js brief dedup --auto --date <YYYY-MM-DD>` | 跨源重复检测（process 后、export 前） |
+| `node out/main/cli.js brief list --status duplicate --format compact` | 查看被合并的重复简讯 |
+| `node out/main/cli.js story list --status processed --json` | 列展示简讯 |
+| `node out/main/cli.js export --status processed --lang zh --date <date> --auto-date --json` | 出图（数据源 stories） |
 | `node out/main/cli.js bindings list` | 查看 aspect→模板绑定 |
 | `node out/main/cli.js guide` | 打印 AGENT_GUIDE.md 路径 |
+| `abseek ... --profile <id>` | 指定 profile（默认 game） |
+
+> 所有命令均可加 `--profile <id>` 切换 profile。信源简报在 `briefs/`，展示简讯在 `stories/`，出图只读 stories。
 
 ## 流程日志（强制）
 
-agent 执行流程时，必须把关键节点追加到 `data/logs/skill-runs-{YYYY-MM-DD}.log`。出问题时靠这个文件快速定位卡在哪一步。
-
-### 日志方法
-
-用 RunCommand 执行 Node 单行命令追加（不要用 Write 工具，会覆盖整个文件）。
-
-⚠️ **必须用 Node 的 `appendFileSync`**，不要用 PowerShell 的 `Add-Content`/`Out-File`（PowerShell 5 默认 GBK 编码写中文会乱码，且部分环境脚本执行策略会拦截）：
+agent 执行流程时，必须把关键节点追加到 `data/logs/skill-runs-{YYYY-MM-DD}.log`（对应 profile 的日志在其 `logs/` 目录）。用 Node 追加（避免 PowerShell GBK 编码问题）：
 
 ```bash
-node -e "require('fs').appendFileSync('data/logs/skill-runs-2026-07-30.log','[08:00:00] [STEP1-START] 采集\n','utf8')"
+node -e "require('fs').appendFileSync('data/logs/skill-runs-2026-08-09.log','[08:00:00] [STEP1-START] 采集\n','utf8')"
 ```
-
-批量追加多行（用 `\n` 拼接）：
-
-```bash
-node -e "require('fs').appendFileSync('data/logs/skill-runs-2026-07-30.log','[08:00:15] [STEP1-OK] 采集: 3源 12条新增\n[08:00:16] [STEP2-START] 拉取raw简讯\n','utf8')"
-```
-
-⚠️ 日志内容含单引号时，Node 字符串外层用双引号、内层用单引号；含双引号时反过来。或用模板字符串拼接。
 
 ### 必须记录的节点
-
-| 时机 | 格式 | 示例 |
-|---|---|---|
-| 每步开始 | `[HH:MM:SS] [STEP{n}-START] <步骤名>` | `[08:00:00] [STEP1-START] 采集` |
-| 每步成功 | `[HH:MM:SS] [STEP{n}-OK] <步骤名>: <结果摘要>` | `[08:00:15] [STEP1-OK] 采集: 3源 12条新增` |
-| 每步失败 | `[HH:MM:SS] [STEP{n}-FAIL] <步骤名>: <错误>` | `[08:00:15] [STEP1-FAIL] 采集: 全部源失败` |
-| 单条简讯处理完 | `[HH:MM:SS] [BRIEF] <id>: aspect=<A\|B\|空> changes=[字段列表]` | `[08:01:20] [BRIEF] 20260730-01-xxx: aspect=A changes=[title,summary,aspect,tags]` |
-| 单条简讯排除（非游戏） | `[HH:MM:SS] [BRIEF-EXCLUDE] <id>: <排除原因>` | `[08:01:30] [BRIEF-EXCLUDE] 20260730-02-yyy: 非游戏行业 → excluded` |
-| 单条简讯失败 | `[HH:MM:SS] [BRIEF-FAIL] <id>: <原因>` | `[08:02:00] [BRIEF-FAIL] 20260730-03-zzz: 内容为空 → ignored` |
-| 去重完成 | `[HH:MM:SS] [STEP4-OK] 去重: 聚类C 重复D条 主简讯P条` | `[08:03:05] [STEP4-OK] 去重: 聚类3 重复5条 主简讯8条` |
-| 流程结束 | `[HH:MM:SS] [END] 采集N 处理M(成功X/失败Y) 去重D条 出图K张` | `[08:03:30] [END] 采集12 处理12(成功11/失败1) 去重5条 出图4张` |
-
-### 完整示例
-
-```
-[08:00:00] [STEP1-START] 采集
-[08:00:15] [STEP1-OK] 采集: 3源 12条新增
-[08:00:16] [STEP2-START] 拉取raw简讯
-[08:00:17] [STEP2-OK] 拉取raw简讯: 12条
-[08:00:17] [STEP3-START] 处理简讯
-[08:01:20] [BRIEF] 20260730-01-xxx: aspect=A changes=[title,summary,aspect,tags,customAttrs]
-[08:01:35] [BRIEF] 20260730-02-yyy: aspect=B changes=[title,summary,aspect,tags]
-[08:02:00] [BRIEF-FAIL] 20260730-03-zzz: 内容为空 → ignored
-[08:03:00] [STEP3-OK] 处理简讯: 成功11 失败1
-[08:03:01] [STEP4-START] 去重
-[08:03:05] [STEP4-OK] 去重: 聚类3 重复5条 主简讯8条
-[08:03:06] [STEP5-START] 出图
-[08:03:30] [STEP5-OK] 出图: 4张 → output/images/2026-07-30
-[08:03:30] [END] 采集12 处理12(成功11/失败1) 去重5条 出图4张
-```
-
-### 日志文件路径
-
-日期用**当天日期**，路径相对项目根：
-```
-data/logs/skill-runs-2026-07-30.log
-```
+| 时机 | 格式 |
+|---|---|
+| 每步开始/成功/失败 | `[HH:MM:SS] [STEP{n}-START\|OK\|FAIL] <步骤名>: <结果>` |
+| 信源排除 | `[HH:MM:SS] [BRIEF-EXCLUDE] <id>: <原因>` |
+| story 生成 | `[HH:MM:SS] [STORY] <id>: aspect=<A\|B\|空> sources=<数>` |
+| story 失败 | `[HH:MM:SS] [STORY-FAIL] <id>: <原因>` |
+| 流程结束 | `[HH:MM:SS] [END] 采集N 信源保留X/排除Y story生成M 出图K张` |
 
 ## 注意事项
 
-1. **工作目录**：所有 CLI 命令必须在 `D:\LFolder\AIProgram\ABSeek` 下执行，否则数据目录定位错误
-2. **不动 GUI 应用**：如果 Electron 应用正在运行，agent 改 md 后应用的 chokidar 会自动增量刷新前端，无需重启
-3. **文件命名**：处理 md 时**不要改名**，只改 frontmatter 内容
-4. **批量处理**：简讯多时逐条处理，每条处理完即可写回，不必等全部处理完
-5. **幂等性**：如果中途中断重跑，已 processed 的简讯不会被 `brief list --status raw` 列出，可安全续跑
-6. **代理**：采集海外源需要本机 Clash 在 127.0.0.1:7890 运行，否则采集会失败
-7. **流程日志**：必须记录到 `data/logs/skill-runs-{date}.log`（见上方「流程日志」一节），CLI 自身的调用日志由 CLI 自动写入 `data/logs/cli-runs-{date}.log`
+1. **工作目录**：所有 CLI 命令必须在项目根 `D:\LFolder\AIProgram\ABSeek` 下执行，否则数据目录定位错误。
+2. **JSON 解析**：见上文「解析 JSON 输出的三个坑」——避免 PowerShell 重定向/管道（GBK 编码），用 Node execSync 解析。
+3. **不动 GUI 应用**：如果 Electron 应用正在运行，agent 改 md 后 chokidar 会自动增量刷新前端，无需重启。
+4. **信源 vs 展示**：采集回的信源简报**不要直接改造成展示**；展示内容通过新增 story 生成。信源只作引用。
+5. **幂等性**：若中途中断重跑，已处理的信源不会出现在 `--status raw`，已生成的 story 不会重复；可安全续跑。
+6. **代理**：采集海外源是否需要代理以及端口，**以 `data/config/sources.json`（或对应 profile 的 `config/sources.json`）的 `global.proxy.server` 为准**（当前为 `http://127.0.0.1:7897`）；单源 `request.useProxy=false` 时无需代理。若代理未运行，采集会失败。
+7. **流程日志**：必须记录到 `data/logs/skill-runs-{date}.log`；CLI 自身日志由 CLI 自动写入 `data/logs/cli-runs-{date}.log`。

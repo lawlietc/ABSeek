@@ -16,9 +16,20 @@ prototype/output/
 data/_invalid/
 data/logs/
 data/briefs/
+data/stories/
 data/AGENT_GUIDE.md
 data/config/sources.json
 data/config/settings.json
+
+# Profile runtime data（与主 profile 同构）
+data/profiles/*/briefs/
+data/profiles/*/stories/
+data/profiles/*/logs/
+data/profiles/*/config/sources.json
+data/profiles/*/_invalid/
+
+# 本地工具
+.mindfs/
 
 # Logs
 *.log

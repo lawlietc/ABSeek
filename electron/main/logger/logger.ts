@@ -18,8 +18,12 @@ const levelTag: Record<LogLevel, string> = {
 /**
  * 简单按天滚动日志，分模块写入 data/logs/
  * 不引入 winston，避免过度工程
+ *
+ * @param consoleOut 是否同时输出到控制台。
+ *   CLI 的 --json 模式传 false，避免日志行污染 JSON 输出（JSON 只从 stdout 解析）；
+ *   GUI / 非 JSON 模式传 true 便于开发期排查。
  */
-export function createLogger(module: string, logsDir: string): Logger {
+export function createLogger(module: string, logsDir: string, consoleOut = true): Logger {
   fs.mkdirSync(logsDir, { recursive: true });
 
   const write = (level: LogLevel, msg: string, detail?: unknown) => {
@@ -34,6 +38,7 @@ export function createLogger(module: string, logsDir: string): Logger {
     } catch {
       // 日志写入失败不抛出
     }
+    if (!consoleOut) return;
     // 同时 console 便于开发期排查
     if (level === 'error') console.error(line.trim());
     else if (level === 'warn') console.warn(line.trim());

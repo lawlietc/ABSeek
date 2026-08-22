@@ -1,18 +1,21 @@
 import * as chokidar from 'chokidar';
 import * as path from 'path';
-import { BriefRepo } from './briefRepo';
 import { Logger } from '../logger/logger';
-import { Brief } from '../core/types';
+
+/** 供监听的仓库只需提供 parseFile（brief 或 story 均可） */
+export interface ParsableRepo {
+  parseFile(filePath: string): { id: string } | null;
+}
 
 export interface WatcherCallbacks {
-  onBriefAdded?: (brief: Brief) => void;
-  onBriefUpdated?: (id: string, brief: Brief) => void;
+  onBriefAdded?: (brief: { id: string }) => void;
+  onBriefUpdated?: (id: string, brief: { id: string }) => void;
   onBriefDeleted?: (id: string) => void;
   onBatchChanged?: () => void;
 }
 
 /**
- * 文件监听器
+ * 文件监听器（brief 与 story 通用）
  * - debounce 400ms
  * - 忽略 *.tmp / *.lock / *.partial
  * - 外部 agent 改动 md 后触发回调
@@ -24,7 +27,7 @@ export class BriefWatcher {
 
   constructor(
     private briefsDir: string,
-    private repo: BriefRepo,
+    private repo: ParsableRepo,
     private log: Logger,
     private callbacks: WatcherCallbacks = {}
   ) {}

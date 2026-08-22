@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Brief, ExportResult } from './types';
+import { Brief, ExportResult, ProfileInfo } from './types';
 import { api, hasApi } from './api';
 import DatePicker from './components/DatePicker';
 import MultiTemplatePanel from './components/MultiTemplatePanel';
 import EditDrawer from './components/EditDrawer';
 import CollectorPanel from './components/CollectorPanel';
+import StoryStudio from './components/StoryStudio';
 
 type Filter = 'all' | 'A' | 'B';
-type Tab = 'studio' | 'collector';
+type Tab = 'source' | 'studio' | 'collector';
 
 function todayStr(): string {
   const d = new Date();
@@ -32,6 +33,11 @@ export default function App() {
   const [exportMsg, setExportMsg] = useState('');
   const [showExcluded, setShowExcluded] = useState(false);
 
+  // profile
+  const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
+  const [currentProfile, setCurrentProfile] = useState<ProfileInfo | null>(null);
+  const [switching, setSwitching] = useState(false);
+
   const loadList = useCallback(async () => {
     const list = await api.brief.list(showExcluded);
     setBriefs(list);
@@ -48,6 +54,33 @@ export default function App() {
     });
     return unsub;
   }, [loadList]);
+
+  // 加载 profile 列表与当前 profile
+  useEffect(() => {
+    api.profile.list().then((list: ProfileInfo[]) => setProfiles(list || []));
+    api.profile.getCurrent().then((p: ProfileInfo) => setCurrentProfile(p));
+    const unsub = api.profile.onChanged(() => {
+      // profile 切换后整体刷新
+      setCurrentProfile(null);
+      api.profile.getCurrent().then((p: ProfileInfo) => {
+        setCurrentProfile(p);
+        setTab('studio');
+        setSelectedIds([]);
+      });
+      loadList();
+    });
+    return unsub;
+  }, [loadList]);
+
+  const handleProfileSwitch = async (profileId: string) => {
+    if (switching || profileId === currentProfile?.id) return;
+    setSwitching(true);
+    try {
+      await api.profile.switch(profileId);
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   // 日期范围 + aspect 筛选
   const filtered = useMemo(() => {
@@ -126,27 +159,52 @@ export default function App() {
   return (
     <div className="app">
       <nav className="topnav">
-        <button
-          className={`nav-tab ${tab === 'studio' ? 'active' : ''}`}
-          onClick={() => setTab('studio')}
-        >
-          简讯工作室
-        </button>
-        <button
-          className={`nav-tab ${tab === 'collector' ? 'active' : ''}`}
-          onClick={() => setTab('collector')}
-        >
-          采集配置
-        </button>
+        <div className="nav-tabs">
+          <button
+            className={`nav-tab ${tab === 'source' ? 'active' : ''}`}
+            onClick={() => setTab('source')}
+          >
+            简讯源数据
+          </button>
+          <button
+            className={`nav-tab ${tab === 'studio' ? 'active' : ''}`}
+            onClick={() => setTab('studio')}
+          >
+            简讯工作室
+          </button>
+          <button
+            className={`nav-tab ${tab === 'collector' ? 'active' : ''}`}
+            onClick={() => setTab('collector')}
+          >
+            采集配置
+          </button>
+        </div>
+        <div className="nav-profile">
+          <select
+            className="select select-sm"
+            value={currentProfile?.id || ''}
+            onChange={(e) => handleProfileSwitch(e.target.value)}
+            disabled={switching}
+          >
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}（{p.id}）
+              </option>
+            ))}
+          </select>
+          {switching && <span className="profile-switching">切换中...</span>}
+        </div>
       </nav>
 
       {tab === 'collector' ? (
         <CollectorPanel />
+      ) : tab === 'studio' ? (
+        <StoryStudio />
       ) : (
         <div className="studio-row">
           <div className="sidebar">
             <header>
-              <h1>ABSeek</h1>
+              <h1>简讯源数据</h1>
               <span className="header-count">{briefs.length} 条</span>
             </header>
 
@@ -190,144 +248,144 @@ export default function App() {
               </label>
             </div>
 
-        <div className="list-toolbar">
-          <span className="list-count">
-            列表 {filtered.length} · 选中 {selectedIds.length}
-          </span>
-          <div className="list-actions">
-            <button className="btn-sm btn-secondary" onClick={selectAll}>
-            全选
-            </button>
-            <button
-              className="btn-sm btn-secondary"
-              onClick={clearAll}
-              disabled={selectedIds.length === 0}
-            >
-            清空
-            </button>
-          </div>
-        </div>
-
-        <div className="brief-list">
-          {filtered.map((b) => {
-            const checked = selectedIds.includes(b.id);
-            const title = b.title.zh || b.title.en || b.id;
-            const isExcluded = b.status === 'excluded';
-            return (
-              <div
-                key={b.id}
-                className={`brief-item ${checked ? 'selected' : ''} ${isExcluded ? 'excluded' : ''}`}
-                onClick={() => toggleSelect(b.id)}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  readOnly
-                  className="bi-checkbox"
-                />
-                <div className="bi-content">
-                  <div className="bi-title">{title}</div>
-                  <div className="bi-meta">
-                    {isExcluded ? (
-                      <span className="badge excluded">已排除</span>
-                    ) : b.aspect === 'A' || b.aspect === 'B' ? (
-                      <span className={`badge ${b.aspect}`}>{b.aspect}</span>
-                    ) : (
-                      <span className="badge unassigned">未分面</span>
-                    )}
-                    <span>{b.source}</span>
-                    <span>{b.date.substring(0, 10)}</span>
-                  </div>
-                </div>
-                {isExcluded ? (
-                  <button
-                    className="bi-edit-btn"
-                    title="恢复显示"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExcluded([b.id], false);
-                    }}
-                  >
-                    ↺
-                  </button>
-                ) : (
-                  <button
-                    className="bi-edit-btn exclude-btn"
-                    title="排除（保留用于去重，不在列表显示）"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExcluded([b.id], true);
-                    }}
-                  >
-                    ✕
-                  </button>
-                )}
+            <div className="list-toolbar">
+              <span className="list-count">
+                列表 {filtered.length} · 选中 {selectedIds.length}
+              </span>
+              <div className="list-actions">
+                <button className="btn-sm btn-secondary" onClick={selectAll}>
+                  全选
+                </button>
                 <button
-                  className="bi-edit-btn"
-                  title="编辑"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingId(b.id);
-                  }}
+                  className="btn-sm btn-secondary"
+                  onClick={clearAll}
+                  disabled={selectedIds.length === 0}
                 >
-                  ✎
+                  清空
                 </button>
               </div>
-            );
-          })}
-          {filtered.length === 0 && <div className="empty">该范围暂无简讯</div>}
-        </div>
+            </div>
 
-        <div className="sidebar-footer">
-          <button
-            className="btn-sm btn-secondary"
-            onClick={() => moveToAspect('A')}
-            disabled={selectedBriefs.every((b) => b.aspect === 'A')}
-          >
-            移到 A 面
-          </button>
-          <button
-            className="btn-sm btn-secondary"
-            onClick={() => moveToAspect('B')}
-            disabled={selectedBriefs.every((b) => b.aspect === 'B')}
-          >
-            移到 B 面
-          </button>
-          <button
-            className="btn-sm btn-secondary"
-            onClick={() => {
-              if (selectedBriefs.length === 1) setEditingId(selectedBriefs[0].id);
-            }}
-            disabled={selectedBriefs.length !== 1}
-          >
-            编辑
-          </button>
-          <button
-            className="btn-sm btn-danger"
-            onClick={() => setExcluded(selectedIds, true)}
-            disabled={selectedBriefs.length === 0}
-          >
-            排除选中
-          </button>
-        </div>
-      </div>
+            <div className="brief-list">
+              {filtered.map((b) => {
+                const checked = selectedIds.includes(b.id);
+                const title = b.title.zh || b.title.en || b.id;
+                const isExcluded = b.status === 'excluded';
+                return (
+                  <div
+                    key={b.id}
+                    className={`brief-item ${checked ? 'selected' : ''} ${isExcluded ? 'excluded' : ''}`}
+                    onClick={() => toggleSelect(b.id)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      readOnly
+                      className="bi-checkbox"
+                    />
+                    <div className="bi-content">
+                      <div className="bi-title">{title}</div>
+                      <div className="bi-meta">
+                        {isExcluded ? (
+                          <span className="badge excluded">已排除</span>
+                        ) : b.aspect === 'A' || b.aspect === 'B' ? (
+                          <span className={`badge ${b.aspect}`}>{b.aspect}</span>
+                        ) : (
+                          <span className="badge unassigned">未分面</span>
+                        )}
+                        <span>{b.source}</span>
+                        <span>{b.date.substring(0, 10)}</span>
+                      </div>
+                    </div>
+                    {isExcluded ? (
+                      <button
+                        className="bi-edit-btn"
+                        title="恢复显示"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExcluded([b.id], false);
+                        }}
+                      >
+                        ↺
+                      </button>
+                    ) : (
+                      <button
+                        className="bi-edit-btn exclude-btn"
+                        title="排除（保留用于去重，不在列表显示）"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExcluded([b.id], true);
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      className="bi-edit-btn"
+                      title="编辑"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(b.id);
+                      }}
+                    >
+                      ✎
+                    </button>
+                  </div>
+                );
+              })}
+              {filtered.length === 0 && <div className="empty">该范围暂无简讯</div>}
+            </div>
 
-      <div className="main">
-        <MultiTemplatePanel
-          briefs={selectedBriefs}
-          lang={lang}
-          onLangChange={setLang}
-          onExport={handleExport}
-          exporting={exporting}
-        />
-        {exportMsg && <div className="export-msg">{exportMsg}</div>}
-      </div>
+            <div className="sidebar-footer">
+              <button
+                className="btn-sm btn-secondary"
+                onClick={() => moveToAspect('A')}
+                disabled={selectedBriefs.every((b) => b.aspect === 'A')}
+              >
+                移到 A 面
+              </button>
+              <button
+                className="btn-sm btn-secondary"
+                onClick={() => moveToAspect('B')}
+                disabled={selectedBriefs.every((b) => b.aspect === 'B')}
+              >
+                移到 B 面
+              </button>
+              <button
+                className="btn-sm btn-secondary"
+                onClick={() => {
+                  if (selectedBriefs.length === 1) setEditingId(selectedBriefs[0].id);
+                }}
+                disabled={selectedBriefs.length !== 1}
+              >
+                编辑
+              </button>
+              <button
+                className="btn-sm btn-danger"
+                onClick={() => setExcluded(selectedIds, true)}
+                disabled={selectedBriefs.length === 0}
+              >
+                排除选中
+              </button>
+            </div>
+          </div>
 
-      <EditDrawer
-        briefId={editingId}
-        onClose={() => setEditingId(null)}
-        onSaved={loadList}
-      />
+          <div className="main">
+            <MultiTemplatePanel
+              briefs={selectedBriefs}
+              lang={lang}
+              onLangChange={setLang}
+              onExport={handleExport}
+              exporting={exporting}
+            />
+            {exportMsg && <div className="export-msg">{exportMsg}</div>}
+          </div>
+
+          <EditDrawer
+            briefId={editingId}
+            onClose={() => setEditingId(null)}
+            onSaved={loadList}
+          />
         </div>
       )}
     </div>

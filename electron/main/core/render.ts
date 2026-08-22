@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import Handlebars from 'handlebars';
-import { Brief, TemplateConfig, TemplateData, TemplateBrief, Pagination } from './types';
+import { Brief, Story, TemplateConfig, TemplateData, TemplateBrief, Pagination } from './types';
 
 function registerHelpers() {
   Handlebars.registerHelper('inc', (value: number) => value + 1);
@@ -64,6 +64,57 @@ export function flattenForLang(
     aspect: brief.aspect,
     customAttrs: brief.customAttrs,
     isTranslated,
+  };
+}
+
+/**
+ * 按目标 lang 展平多语言展示简讯（story）。
+ * 与 flattenForLang 的区别：source 取首个信源网站名，并附上完整信源列表 / 数量，
+ * 供模板展示「N 家媒体报道」等。
+ */
+export function flattenStoryForLang(
+  story: Story,
+  lang: string,
+  onMissingLang: 'fallback' | 'skip'
+): TemplateBrief | null {
+  let title = story.title[lang];
+  let summary = story.summary[lang];
+  let isTranslated = true;
+
+  if (!title) {
+    if (onMissingLang === 'skip') return null;
+    const langs = Object.keys(story.title);
+    if (langs.length > 0) {
+      title = story.title[langs[0]];
+      isTranslated = false;
+    } else {
+      title = '';
+      isTranslated = false;
+    }
+  }
+  if (!summary) {
+    if (onMissingLang === 'skip') return null;
+    const langs = Object.keys(story.summary);
+    summary = langs.length > 0 ? story.summary[langs[0]] : '';
+    if (isTranslated) isTranslated = false;
+  }
+
+  const sources = story.sources || [];
+  const sourceName =
+    (sources[0] && (sources[0].sourceName || sources[0].sourceId)) || '';
+  return {
+    id: story.id,
+    title,
+    summary,
+    source: sourceName,
+    date: story.date,
+    tags: story.tags,
+    category: story.category,
+    aspect: story.aspect,
+    customAttrs: story.customAttrs,
+    isTranslated,
+    sources: sources.map((s) => ({ sourceId: s.sourceId, sourceName: s.sourceName })),
+    sourceCount: sources.length,
   };
 }
 

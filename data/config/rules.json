@@ -1,0 +1,74 @@
+{
+  "industryKeywords": [
+    "game", "games", "gaming", "gamer", "video game",
+    "playstation", "ps5", "ps4", "xbox", "nintendo", "switch", "steam", "valve",
+    "epic games", "sega", "ubisoft", "activision", "blizzard", "capcom",
+    "square enix", "fromsoftware", "bandai", "namco", "bethesda", "cd projekt",
+    "rockstar", "take-two", "tencent games", "netease", "sony interactive",
+    "microsoft gaming", "riot games", "bandai namco", "konami", "ncsoft",
+    "rpg", "fps", "moba", "mmo", "jrpg", "roguelike", "soulslike",
+    "battle royale", "platformer", "shooter", "metroidvania",
+    "dlc", "expansion", "patch", "update", "sequel", "prequel", "remake",
+    "remaster", "beta", "demo", "early access", "gameplay", "trailer",
+    "reveal", "season pass", "battle pass", "microtransaction", "loot box",
+    "gacha", "free-to-play", "f2p", "pay-to-win",
+    "release", "launch", "delay", "cancel", "shutdown", "review", "score",
+    "rating", "goty", "e3", "gamescom", "tgs", "summer game fest",
+    "nintendo direct", "state of play", "xbox showcase", "playstation showcase",
+    "genshin", "honkai", "zelda", "mario", "pokemon", "pokémon",
+    "call of duty", "fifa", "madden", "nba 2k", "grand theft auto", "gta",
+    "cyberpunk", "witcher", "elden ring", "dark souls", "minecraft",
+    "fortnite", "apex", "valorant", "league of legends", "csgo",
+    "counter-strike", "dota", "overwatch", "destiny", "halo",
+    "god of war", "spider-man", "batman", "final fantasy", "dragon quest",
+    "metroid", "kirby", "smash bros", "animal crossing"
+  ],
+  "aspectRules": {
+    "definition": "A=对玩家是好消息，B=对玩家是坏消息；无法判断留空",
+    "aKeywords": [
+      "new game", "announce", "announced", "reveal", "revealed", "unveil",
+      "unveiled", "teaser", "teased",
+      "release date", "launch date", "coming out", "launching",
+      "dlc", "expansion", "free update", "free dlc", "free content",
+      "patch", "content update", "new content",
+      "discount", "sale", "price cut", "price drop", "free-to-play",
+      "acclaimed", "praised", "award", "goty", "high review", "good review",
+      "10/10", "9/10", "masterpiece", "must-play", "game of the year",
+      "best-selling", "record sales", "milestone"
+    ],
+    "bKeywords": [
+      "delay", "delayed", "postpone", "postponed", "push back", "pushed back",
+      "cancel", "cancelled", "canceled", "abandon",
+      "shutdown", "shut down", "server closure", "end of life", "discontinued",
+      "price hike", "price increase", "price raise", "more expensive",
+      "layoff", "layoffs", "fired", "sacked", "redundancy", "job cut",
+      "review bomb", "low review", "bad review", "poor review", "panned",
+      "slammed", "criticized", "buggy", "broken", "unplayable", "worst",
+      "microtransaction", "loot box", "pay-to-win", "p2w", "grindy",
+      "lawsuit", "sued", "patent infringement", "legal trouble",
+      "delayed indefinitely", "no longer in development"
+    ]
+  },
+  "tagRules": [
+    { "tag": "DLC", "keywords": ["dlc", "expansion", "season pass", "battle pass"] },
+    { "tag": "延期", "keywords": ["delay", "delayed", "postpone", "push back"] },
+    { "tag": "取消", "keywords": ["cancel", "cancelled", "canceled", "abandon"] },
+    { "tag": "发售", "keywords": ["release date", "launch date", "release", "launch"] },
+    { "tag": "评分", "keywords": ["review", "score", "rating", "goty", "metacritic"] },
+    { "tag": "财报", "keywords": ["earnings", "revenue", "quarterly", "fiscal", "financial"] },
+    { "tag": "人事变动", "keywords": ["layoff", "layoffs", "fired", "resign", "hire", "ceo"] },
+    { "tag": "更新", "keywords": ["patch", "update", "free update", "content update"] },
+    { "tag": "诉讼", "keywords": ["lawsuit", "sued", "patent", "legal"] },
+    { "tag": "测试", "keywords": ["beta", "demo", "early access", "alpha", "closed beta"] },
+    { "tag": "关停", "keywords": ["shutdown", "shut down", "server closure", "end of life"] }
+  ],
+  "importance": {
+    "high": [
+      "goty", "shutdown", "cancelled", "delayed", "major delay",
+      "acquisition", "announce", "revealed", "release date",
+      "layoff", "lawsuit", "game of the year", "masterpiece"
+    ],
+    "medium": ["sequel", "remake", "remaster", "new game", "dlc", "expansion", "beta"]
+  },
+  "llmGuide": "判断资讯是否属于游戏行业；非游戏 → excluded。A=对玩家是好消息，B=对玩家是坏消息，无法判断留空。"
+}

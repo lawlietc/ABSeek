@@ -114,15 +114,12 @@ export default function EditDrawer({ briefId, onClose, onSaved }: Props) {
               </div>
               <div className="form-row">
                 <label>分类 (aspect)</label>
-                <select
-                  className="select"
+                <input
+                  className="input"
                   value={brief.aspect}
                   onChange={(e) => update({ aspect: e.target.value })}
-                >
-                  <option value="">未分面</option>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                </select>
+                  placeholder="A / B / 自定义主题"
+                />
               </div>
               <div className="form-row">
                 <label>状态 (status)</label>

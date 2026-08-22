@@ -13,11 +13,34 @@ export const api = {
       return raw.brief.onChanged(cb);
     },
   },
+  story: {
+    list: (includeExcluded?: boolean) =>
+      raw ? raw.story.list(includeExcluded) : Promise.resolve([]),
+    get: (id: string) => (raw ? raw.story.get(id) : Promise.resolve(null)),
+    save: (story: any) => (raw ? raw.story.save(story) : Promise.resolve(false)),
+    onChanged: (cb: () => void): (() => void) => {
+      if (!raw?.story?.onChanged) return () => {};
+      return raw.story.onChanged(cb);
+    },
+  },
+  profile: {
+    list: () => (raw ? raw.profile.list() : Promise.resolve([])),
+    getCurrent: () => (raw ? raw.profile.getCurrent() : Promise.resolve({ id: 'game', name: '游戏' })),
+    switch: (profileId: string) => (raw ? raw.profile.switch(profileId) : Promise.resolve({ id: profileId, name: '' })),
+    onChanged: (cb: () => void): (() => void) => {
+      if (!raw?.profile?.onChanged) return () => {};
+      return raw.profile.onChanged(cb);
+    },
+  },
   template: {
     list: () => (raw ? raw.template.list() : Promise.resolve([])),
     previewHtml: (args: any) =>
       raw
         ? raw.template.previewHtml(args)
+        : Promise.resolve({ html: '', totalPages: 0, briefCount: 0 }),
+    previewStory: (args: any) =>
+      raw
+        ? raw.template.previewStory(args)
         : Promise.resolve({ html: '', totalPages: 0, briefCount: 0 }),
   },
   playlist: {
@@ -36,6 +59,10 @@ export const api = {
     current: (args: { briefIds: string[]; lang: string }) =>
       raw
         ? raw.export.current(args)
+        : Promise.resolve({ success: false, files: [], outputDir: '' }),
+    story: (args: { storyIds: string[]; lang: string }) =>
+      raw
+        ? raw.export.story(args)
         : Promise.resolve({ success: false, files: [], outputDir: '' }),
   },
   app: {

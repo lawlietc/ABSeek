@@ -186,14 +186,12 @@ export default function MultiTemplatePanel({
             <div className="binding-row" key={i}>
               <div className="mp-field">
                 <label>Aspect</label>
-                <select
-                  className="select select-sm"
+                <input
+                  className="input"
                   value={b.aspect}
                   onChange={(e) => updateDraft(i, { aspect: e.target.value })}
-                >
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                </select>
+                  placeholder="A / B / 自定义主题"
+                />
               </div>
               <div className="mp-field" style={{ flex: 1 }}>
                 <label>模板</label>

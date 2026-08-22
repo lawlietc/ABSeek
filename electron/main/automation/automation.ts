@@ -4,8 +4,9 @@ import * as cron from 'node-cron';
 import { loadAutomation, saveAutomation } from '../store/configRepo';
 import { loadSources } from '../store/configRepo';
 import { BriefRepo } from '../store/briefRepo';
+import { StoryRepo } from '../store/storyRepo';
 import { Scheduler } from '../collector/scheduler';
-import { runAutoExport } from '../core/autoExport';
+import { runStoryAutoExport } from '../core/autoExport';
 import { Logger } from '../logger/logger';
 import {
   AutomationConfig,
@@ -22,6 +23,7 @@ export class Automation {
   private exportTask: cron.ScheduledTask | null = null;
   private scheduler: Scheduler;
   private briefRepo: BriefRepo;
+  private storyRepo: StoryRepo;
   private configDir: string;
   private templatesDir: string;
   private outputDir: string;
@@ -33,6 +35,7 @@ export class Automation {
   constructor(
     scheduler: Scheduler,
     briefRepo: BriefRepo,
+    storyRepo: StoryRepo,
     configDir: string,
     templatesDir: string,
     outputDir: string,
@@ -40,6 +43,7 @@ export class Automation {
   ) {
     this.scheduler = scheduler;
     this.briefRepo = briefRepo;
+    this.storyRepo = storyRepo;
     this.configDir = configDir;
     this.templatesDir = templatesDir;
     this.outputDir = outputDir;
@@ -206,8 +210,8 @@ export class Automation {
     const start = Date.now();
 
     try {
-      const r = await runAutoExport(
-        this.briefRepo,
+      const r = await runStoryAutoExport(
+        this.storyRepo,
         this.templatesDir,
         this.configDir,
         this.outputDir,
